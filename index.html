@@ -1,0 +1,1515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>OrthoFlow</title>
+  <meta name="theme-color" content="#0b0f19">
+  <link rel="manifest" href='data:application/manifest+json,{"name":"OrthoFlow Clinical Dashboard","short_name":"OrthoFlow","start_url":".","display":"standalone","background_color":"#0b0f19","theme_color":"#0b0f19"}'>
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Client-Side OCR Engine -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <style>
+    body { background-color: #0b0f19; color: #e2e8f0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; touch-action: manipulation; }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    button { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased">
+
+  <!-- ================= PIN LOCK SCREEN ================= -->
+  <div id="pinScreen" class="fixed inset-0 z-50 bg-[#0b0f19] flex flex-col items-center justify-center px-4">
+    <div class="w-full max-w-xs flex flex-col items-center">
+      <div class="h-12 w-12 rounded-xl bg-blue-600/20 border border-blue-500/40 flex items-center justify-center mb-4">
+        <svg class="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+        </svg>
+      </div>
+      <h1 class="text-xl font-bold tracking-tight text-white mb-1">OrthoFlow</h1>
+      <p class="text-xs text-slate-400 mb-6">Adult Reconstruction & Clinical Scribe</p>
+
+      <!-- Pin Indicator Dots -->
+      <div class="flex gap-3 mb-8">
+        <div id="dot0" class="w-4 h-4 rounded-full border-2 border-slate-600 bg-slate-900 transition-colors"></div>
+        <div id="dot1" class="w-4 h-4 rounded-full border-2 border-slate-600 bg-slate-900 transition-colors"></div>
+        <div id="dot2" class="w-4 h-4 rounded-full border-2 border-slate-600 bg-slate-900 transition-colors"></div>
+        <div id="dot3" class="w-4 h-4 rounded-full border-2 border-slate-600 bg-slate-900 transition-colors"></div>
+        <div id="dot4" class="w-4 h-4 rounded-full border-2 border-slate-600 bg-slate-900 transition-colors"></div>
+        <div id="dot5" class="w-4 h-4 rounded-full border-2 border-slate-600 bg-slate-900 transition-colors"></div>
+      </div>
+
+      <!-- Numeric Keypad -->
+      <div class="grid grid-cols-3 gap-3 w-full max-w-[280px]">
+        <button type="button" class="key-btn h-14 rounded-2xl bg-slate-900 border border-slate-800 text-xl font-bold text-white active:bg-blue-600/30 active:border-blue-500" data-val="1">1</button>
+        <button type="button" class="key-btn h-14 rounded-2xl bg-slate-900 border border-slate-800 text-xl font-bold text-white active:bg-blue-600/30 active:border-blue-500" data-val="2">2</button>
+        <button type="button" class="key-btn h-14 rounded-2xl bg-slate-900 border border-slate-800 text-xl font-bold text-white active:bg-blue-600/30 active:border-blue-500" data-val="3">3</button>
+        <button type="button" class="key-btn h-14 rounded-2xl bg-slate-900 border border-slate-800 text-xl font-bold text-white active:bg-blue-600/30 active:border-blue-500" data-val="4">4</button>
+        <button type="button" class="key-btn h-14 rounded-2xl bg-slate-900 border border-slate-800 text-xl font-bold text-white active:bg-blue-600/30 active:border-blue-500" data-val="5">5</button>
+        <button type="button" class="key-btn h-14 rounded-2xl bg-slate-900 border border-slate-800 text-xl font-bold text-white active:bg-blue-600/30 active:border-blue-500" data-val="6">6</button>
+        <button type="button" class="key-btn h-14 rounded-2xl bg-slate-900 border border-slate-800 text-xl font-bold text-white active:bg-blue-600/30 active:border-blue-500" data-val="7">7</button>
+        <button type="button" class="key-btn h-14 rounded-2xl bg-slate-900 border border-slate-800 text-xl font-bold text-white active:bg-blue-600/30 active:border-blue-500" data-val="8">8</button>
+        <button type="button" class="key-btn h-14 rounded-2xl bg-slate-900 border border-slate-800 text-xl font-bold text-white active:bg-blue-600/30 active:border-blue-500" data-val="9">9</button>
+        <button type="button" id="clearBtn" class="h-14 rounded-2xl bg-slate-900/40 text-xs font-semibold text-slate-400 active:bg-slate-800">CLEAR</button>
+        <button type="button" class="key-btn h-14 rounded-2xl bg-slate-900 border border-slate-800 text-xl font-bold text-white active:bg-blue-600/30 active:border-blue-500" data-val="0">0</button>
+        <button type="button" id="deleteBtn" class="h-14 rounded-2xl bg-slate-900/40 text-lg font-semibold text-slate-400 active:bg-slate-800">⌫</button>
+      </div>
+      <p id="pinError" class="text-xs text-red-400 mt-4 h-4 font-medium text-center"></p>
+    </div>
+  </div>
+
+  <!-- ================= TOP HEADER ================= -->
+  <header class="sticky top-0 z-40 bg-[#0f172a]/95 backdrop-blur border-b border-slate-800 px-4 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-2">
+      <div class="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center font-bold text-white text-xs">OF</div>
+      <div>
+        <h1 class="text-sm font-bold text-white leading-tight">OrthoFlow</h1>
+        <p class="text-[10px] text-slate-400">Dr. Spencer Schulte | DDEAMC</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-2">
+      <button onclick="toggleScreeningModal()" class="px-2.5 py-1 rounded-lg bg-emerald-600/20 border border-emerald-500/40 text-xs text-emerald-300 font-medium active:bg-emerald-600/30">
+        Run List (<span id="clinicCount">0</span>)
+      </button>
+      <button onclick="lockApp()" class="px-2.5 py-1 rounded-lg bg-slate-800 border border-slate-700 text-xs text-slate-300 font-medium active:bg-slate-700">Lock</button>
+    </div>
+  </header>
+
+  <!-- ================= MAIN CONTAINER ================= -->
+  <main class="flex-1 max-w-2xl mx-auto w-full p-4 flex flex-col gap-4 pb-12">
+
+    <!-- Clinic Date Selector & Queue Header -->
+    <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-3.5 flex flex-col gap-2">
+      <div class="flex items-center justify-between">
+        <label class="text-[10px] text-slate-400 font-semibold tracking-wider uppercase">Active Clinic Date</label>
+        <span class="text-[10px] text-blue-400 font-mono" id="activeDateDisplay">Loaded</span>
+      </div>
+      <div class="flex gap-2">
+        <input type="date" id="clinicDatePicker" onchange="onClinicDateChange()" class="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500">
+        <button onclick="toggleScreeningModal()" class="px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-xs font-semibold text-slate-200 active:bg-slate-700">
+          View 1-Liners
+        </button>
+      </div>
+    </div>
+
+    <!-- OCR Camera & Run-List Scanner -->
+    <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-3.5">
+      <div class="flex items-center justify-between">
+        <div>
+          <span class="text-xs font-bold text-white flex items-center gap-1.5">
+            <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
+            </svg>
+            Scan Schedule / Face Sheet
+          </span>
+          <p class="text-[10px] text-slate-400">On-device OCR parser & Auto-Router</p>
+        </div>
+        <label class="cursor-pointer px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold active:bg-blue-700 transition-colors">
+          Scan Photo
+          <input type="file" id="ocrInput" accept="image/*" capture="environment" class="hidden" onchange="processImage(this)">
+        </label>
+      </div>
+      <div id="ocrProgressBox" class="hidden mt-3 pt-3 border-t border-slate-800">
+        <div class="flex justify-between text-[11px] mb-1">
+          <span id="ocrStatusText" class="text-blue-400 font-medium">Initializing camera engine...</span>
+          <span id="ocrPercent" class="text-slate-400 font-mono">0%</span>
+        </div>
+        <div class="w-full bg-slate-950 rounded-full h-1.5 overflow-hidden">
+          <div id="ocrProgressBar" class="bg-blue-500 h-1.5 rounded-full transition-all duration-150" style="width: 0%"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Patient Header & Post-Op Matchmaker Banner -->
+    <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-sm">
+      <div class="flex justify-between items-center mb-3">
+        <span class="text-[11px] font-semibold tracking-wider uppercase text-blue-400">Patient Encounter</span>
+        <div class="flex gap-2">
+          <button onclick="savePatientToClinicList()" class="px-2.5 py-1 rounded-lg bg-emerald-600/20 border border-emerald-500/40 text-emerald-400 text-xs font-medium active:bg-emerald-600/30">
+            + Queue Pt
+          </button>
+          <button onclick="lookupPatient()" id="matchBtn" class="px-2.5 py-1 rounded-lg bg-blue-600/20 border border-blue-500/40 text-blue-400 text-xs font-medium active:bg-blue-600/30">
+            Match Registry
+          </button>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2 mb-2">
+        <div>
+          <label class="text-[10px] text-slate-400 font-medium block mb-1">Patient Name</label>
+          <input id="ptName" onblur="lookupPatient()" type="text" placeholder="Last, First" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500">
+        </div>
+        <div>
+          <label class="text-[10px] text-slate-400 font-medium block mb-1">Age / Gender</label>
+          <input id="ptAgeGender" type="text" placeholder="e.g. 64M" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500">
+        </div>
+      </div>
+
+      <!-- Matchmaker Status Alert -->
+      <div id="matchAlert" class="hidden mt-3 p-3 rounded-xl border"></div>
+    </div>
+
+    <!-- Master Template Selector with Template Builder Launcher -->
+    <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4">
+      <div class="flex justify-between items-center mb-1.5">
+        <label class="text-[10px] text-slate-400 font-semibold tracking-wider uppercase">Active Clinical Module</label>
+        <div class="flex items-center gap-2">
+          <span id="autoRoutedBadge" class="hidden text-[10px] text-blue-400 font-medium bg-blue-900/40 px-2 py-0.5 rounded-full border border-blue-600/40">Auto-Routed</span>
+          <button onclick="toggleTemplateStudio()" class="text-[11px] font-semibold text-blue-400 hover:text-blue-300">
+            + New Template
+          </button>
+        </div>
+      </div>
+      <select id="templateSelect" onchange="renderTemplateFields()" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white font-medium focus:outline-none focus:border-blue-500">
+        <optgroup label="Post-Operative Surveillance">
+          <option value="postop">Post-Operative Follow-Up (2W / 6W / 12W / 1Y)</option>
+        </optgroup>
+        <optgroup label="Primary Arthroplasty Clinic">
+          <option value="new_hip">New Hip Consultation (OA / AVN / Dysplasia)</option>
+          <option value="new_knee">New Knee Consultation (OA / Alignment)</option>
+        </optgroup>
+        <optgroup label="Revision & Problem Arthroplasty">
+          <option value="painful_joint">Painful TKA / THA (Failed Arthroplasty / PJI Workup)</option>
+        </optgroup>
+        <optgroup label="Telehealth & Remote Care">
+          <option value="telehealth">Telephone Visit (MSK Diagnostic Review / 99441-3)</option>
+        </optgroup>
+        <optgroup label="Sports & Consultations">
+          <option value="sports">New Sports Knee / Shoulder Consult</option>
+          <option value="hip_fx">Geriatric Hip Fracture Inpatient Consult</option>
+          <option value="gen_fx">General ED Fracture Consult</option>
+        </optgroup>
+        <optgroup label="Operative Reports - Adult Reconstruction (Zimmer Biomet)">
+          <option value="op_da_tha">Direct Anterior THA (Bikini / Standard / Z1)</option>
+          <option value="op_primary_tka">Primary Total Knee Arthroplasty (Persona CR/PS)</option>
+          <option value="op_hip_hemi">Bipolar Hip Hemiarthroplasty (Direct Anterior)</option>
+          <option value="op_rev_tka">Revision TKA - Liner Exchange (Regional IO Vanc)</option>
+          <option value="op_uka">UKA - Oxford Partial Knee</option>
+          <option value="op_stage1_pji">Stage 1 Revision THA / TKA (PJI Debridement & Spacer)</option>
+          <option value="op_stage2_tha">Stage 2 Revision THA (Re-Implantation)</option>
+        </optgroup>
+        <optgroup label="Operative Reports - Trauma & Fractures (Synthes / Stryker)">
+          <option value="op_lat_plateau">Lateral Tibial Plateau ORIF (Synthes 3.5mm LPHP / Raft)</option>
+          <option value="op_med_plateau">Medial Tibial Plateau ORIF (Posteromedial Buttress)</option>
+          <option value="op_bicondylar_plateau">Bicondylar Tibial Plateau ORIF (Dual Incision/Plating)</option>
+          <option value="op_clavicle">Clavicle Shaft ORIF (Precontoured Superior/Anteroinferior Plate)</option>
+          <option value="op_femur_fx">ORIF Periprosthetic Femur Fracture (Cable / Plate)</option>
+        </optgroup>
+        <!-- In-App Custom Templates Populated Here -->
+        <optgroup label="Custom User Operative Templates" id="customTemplateGroup"></optgroup>
+      </select>
+    </div>
+
+    <!-- Dynamic Form Area -->
+    <div id="dynamicForm" class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 flex flex-col gap-3"></div>
+
+    <!-- Dynamic Wound Closure -->
+    <div id="woundClosureSection" class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4">
+      <label class="text-[10px] text-slate-400 font-semibold tracking-wider uppercase block mb-2">Wound Closure & Dressing Protocol</label>
+      <div class="grid grid-cols-3 gap-2">
+        <button type="button" onclick="setClosure('default')" id="btnClosureDefault" class="py-2 px-1 rounded-xl text-center border text-[11px] font-medium border-blue-500 bg-blue-600/20 text-white">
+          Sylke + Aquacel
+        </button>
+        <button type="button" onclick="setClosure('prineo')" id="btnClosurePrineo" class="py-2 px-1 rounded-xl text-center border text-[11px] font-medium border-slate-800 bg-slate-950 text-slate-400">
+          Prineo + Mepilex
+        </button>
+        <button type="button" onclick="setClosure('prevena')" id="btnClosurePrevena" class="py-2 px-1 rounded-xl text-center border text-[11px] font-medium border-slate-800 bg-slate-950 text-slate-400">
+          Prevena (-125mmHg)
+        </button>
+      </div>
+    </div>
+
+    <!-- Special Precautions Input -->
+    <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4">
+      <div class="flex justify-between items-center mb-1.5">
+        <label class="text-[10px] text-slate-400 font-semibold tracking-wider uppercase">Special Instructions / Precautions</label>
+        <span class="text-[10px] text-amber-400 font-medium">Syncs to Registry & 1-Liner</span>
+      </div>
+      <input id="postOpInstructions" type="text" placeholder="e.g. Discuss DA-THA, KL-4 OA, NWB 6 wks, Prevena 7d battery" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500">
+    </div>
+
+    <!-- Raw Notes & Dictation Area -->
+    <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4">
+      <label class="text-[10px] text-slate-400 font-semibold tracking-wider uppercase block mb-2">Dictation & Raw Notes</label>
+      <textarea id="dictationBox" rows="3" placeholder="Dictate clinical specifics, exam nuances, or implant serials using Gboard mic..." class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-blue-500 no-scrollbar"></textarea>
+    </div>
+
+    <!-- Assembled Clinical Note Output -->
+    <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 flex flex-col gap-2">
+      <div class="flex justify-between items-center">
+        <label class="text-[10px] text-slate-400 font-semibold tracking-wider uppercase">Generated Clinical Documentation</label>
+        <button onclick="assembleNote()" class="text-[11px] text-blue-400 font-medium">Re-Generate</button>
+      </div>
+      <textarea id="noteOutput" rows="11" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-slate-200 font-mono leading-relaxed focus:outline-none no-scrollbar"></textarea>
+
+      <!-- Action Buttons -->
+      <div class="grid grid-cols-3 gap-2 mt-2">
+        <button onclick="copyNote()" id="copyBtn" class="py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-xs font-semibold text-white active:bg-slate-700">
+          Copy Note
+        </button>
+        <button onclick="shareToKeep()" class="py-2.5 rounded-xl bg-amber-600/20 border border-amber-500/40 text-xs font-semibold text-amber-300 active:bg-amber-600/30">
+          Export Keep
+        </button>
+        <button onclick="logToRegistry()" id="logRegistryBtn" class="py-2.5 rounded-xl bg-blue-600 border border-blue-500 text-xs font-semibold text-white active:bg-blue-700">
+          Log Case
+        </button>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ================= IN-APP TEMPLATE STUDIO MODAL ================= -->
+  <div id="templateStudioModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex flex-col justify-end p-0 sm:p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-2xl max-w-2xl w-full mx-auto p-5 flex flex-col max-h-[90vh]">
+      <div class="flex justify-between items-center mb-3">
+        <div>
+          <h2 class="text-sm font-bold text-white uppercase tracking-wider">Template Studio</h2>
+          <p class="text-[11px] text-slate-400">Design & Save New Operative Templates</p>
+        </div>
+        <button onclick="toggleTemplateStudio()" class="w-8 h-8 rounded-full bg-slate-800 text-slate-300 flex items-center justify-center font-bold">✕</button>
+      </div>
+
+      <div class="flex-1 overflow-y-auto flex flex-col gap-3 mb-4 pr-1">
+        <div>
+          <label class="text-[10px] text-slate-400 font-medium block mb-1">Template Title / Procedure Name</label>
+          <input id="newTemplateTitle" type="text" placeholder="e.g. Subtrochanteric Femur Fracture ORIF (Synthes 4.5mm)" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500">
+        </div>
+
+        <div>
+          <label class="text-[10px] text-slate-400 font-medium block mb-1">Default Implants</label>
+          <input id="newTemplateImplants" type="text" placeholder="e.g. Synthes 4.5mm Broad Curved Locking Plate, 2x Dall-Miles Cables" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500">
+        </div>
+
+        <div>
+          <div class="flex justify-between items-center mb-1">
+            <label class="text-[10px] text-slate-400 font-medium">Operative Report Text Skeleton</label>
+            <span class="text-[9px] text-blue-400">Insert tags: {PATIENT_NAME}, {DATE}, {IMPLANTS}, {CLOSURE}, {DICTATION}</span>
+          </div>
+          <textarea id="newTemplateBody" rows="10" placeholder="OPERATIVE REPORT
+PATIENT: {PATIENT_NAME} | DEMOGRAPHICS: {AGE_GENDER}
+DATE: {DATE}
+SURGEON: {SURGEON}
+HOSPITAL: {HOSPITAL}
+
+PROCEDURE PERFORMED: [Procedure Name]
+ESTIMATED BLOOD LOSS: {EBL}
+
+IMPLANTS PLACED:
+{IMPLANTS}
+
+SURGICAL TECHNIQUE:
+[Detail surgical approach and fixation steps here...]
+
+WOUND CLOSURE:
+{CLOSURE}
+
+PRECAUTIONS & PLAN:
+{PRECAUTIONS}
+
+NOTES & INTRAOPERATIVE FINDINGS:
+{DICTATION}" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-slate-200 font-mono leading-relaxed focus:outline-none no-scrollbar"></textarea>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2">
+        <button onclick="saveCustomTemplate()" class="py-2.5 rounded-xl bg-blue-600 border border-blue-500 text-xs font-semibold text-white active:bg-blue-700">
+          Save Template
+        </button>
+        <button onclick="toggleTemplateStudio()" class="py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-xs font-semibold text-slate-300 active:bg-slate-700">
+          Cancel
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= SCREENING LIST MODAL ================= -->
+  <div id="screeningModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex flex-col justify-end p-0 sm:p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-2xl max-w-2xl w-full mx-auto p-5 flex flex-col max-h-[85vh]">
+      <div class="flex justify-between items-center mb-3">
+        <div>
+          <h2 class="text-sm font-bold text-white uppercase tracking-wider">Clinic Screening Roster</h2>
+          <p class="text-[11px] text-slate-400" id="modalClinicDateHeader">Date: Select Date</p>
+        </div>
+        <button onclick="toggleScreeningModal()" class="w-8 h-8 rounded-full bg-slate-800 text-slate-300 flex items-center justify-center font-bold">✕</button>
+      </div>
+
+      <div class="flex-1 overflow-y-auto mb-4">
+        <textarea id="screeningListText" rows="12" readonly class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-emerald-400 font-mono leading-relaxed focus:outline-none no-scrollbar"></textarea>
+      </div>
+
+      <div class="grid grid-cols-3 gap-2">
+        <button onclick="copyScreeningList()" id="copyScreeningBtn" class="py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-xs font-semibold text-white active:bg-slate-700">
+          Copy List
+        </button>
+        <button onclick="shareScreeningListToKeep()" class="py-2.5 rounded-xl bg-amber-600/20 border border-amber-500/40 text-xs font-semibold text-amber-300 active:bg-amber-600/30">
+          Export Keep
+        </button>
+        <button onclick="clearCurrentClinicQueue()" class="py-2.5 rounded-xl bg-red-900/30 border border-red-700/50 text-xs font-semibold text-red-400 active:bg-red-900/50">
+          Clear Roster
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= RUNTIME LOGIC & ARCHITECTURE ================= -->
+  <script>
+    const WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbzPj4MzgdXBoQOBssuKq1lxuYhKFvPbwJSWsVunCyKnN_a_6uNNzIhL7ECDTM3yXgFU4A/exec";
+    const APP_PIN = "011616";
+    let enteredPin = "";
+    let currentClosure = "default";
+    let matchedCaseData = null;
+    let inactivityTimer = null;
+    let currentClinicDate = new Date().toISOString().split('T')[0];
+
+    // --- Inactivity Auto-Lock (15 Minutes) ---
+    function resetInactivityTimer() {
+      clearTimeout(inactivityTimer);
+      inactivityTimer = setTimeout(() => {
+        lockApp();
+      }, 15 * 60 * 1000);
+    }
+    ['touchstart', 'mousedown', 'keydown', 'scroll'].forEach(evt => {
+      window.addEventListener(evt, resetInactivityTimer, { passive: true });
+    });
+
+    // --- Keypad Initialization ---
+    function initKeypad() {
+      document.querySelectorAll(".key-btn").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          e.preventDefault();
+          handleDigit(btn.getAttribute("data-val"));
+        });
+      });
+
+      document.getElementById("clearBtn").addEventListener("click", (e) => {
+        e.preventDefault();
+        enteredPin = "";
+        updateDots();
+      });
+
+      document.getElementById("deleteBtn").addEventListener("click", (e) => {
+        e.preventDefault();
+        enteredPin = enteredPin.slice(0, -1);
+        updateDots();
+      });
+    }
+
+    function handleDigit(digit) {
+      if (enteredPin.length < 6) {
+        enteredPin += digit;
+        updateDots();
+        if (enteredPin.length === 6) {
+          setTimeout(verifyPin, 50);
+        }
+      }
+    }
+
+    function updateDots() {
+      for (let i = 0; i < 6; i++) {
+        const dot = document.getElementById("dot" + i);
+        if (dot) {
+          if (i < enteredPin.length) {
+            dot.className = "w-4 h-4 rounded-full border-2 border-blue-500 bg-blue-500 transition-colors";
+          } else {
+            dot.className = "w-4 h-4 rounded-full border-2 border-slate-600 bg-slate-900 transition-colors";
+          }
+        }
+      }
+    }
+
+    function verifyPin() {
+      if (enteredPin === APP_PIN) {
+        document.getElementById("pinScreen").classList.add("hidden");
+        sessionStorage.setItem("orthoflow_unlocked", "true");
+        enteredPin = "";
+        updateDots();
+        resetInactivityTimer();
+      } else {
+        const err = document.getElementById("pinError");
+        err.innerText = "Incorrect PIN";
+        setTimeout(() => {
+          enteredPin = "";
+          updateDots();
+          err.innerText = "";
+        }, 600);
+      }
+    }
+
+    function lockApp() {
+      sessionStorage.removeItem("orthoflow_unlocked");
+      document.getElementById("pinScreen").classList.remove("hidden");
+      enteredPin = "";
+      updateDots();
+      clearTimeout(inactivityTimer);
+    }
+
+    // --- Custom Template Manager (Local Storage) ---
+    function getCustomTemplates() {
+      const stored = localStorage.getItem("orthoflow_custom_templates");
+      return stored ? JSON.parse(stored) : [];
+    }
+
+    function loadCustomTemplatesIntoDropdown() {
+      const group = document.getElementById("customTemplateGroup");
+      group.innerHTML = "";
+      const list = getCustomTemplates();
+      list.forEach((t, idx) => {
+        const opt = document.createElement("option");
+        opt.value = `custom_${idx}`;
+        opt.innerText = t.title;
+        group.appendChild(opt);
+      });
+    }
+
+    function toggleTemplateStudio() {
+      const modal = document.getElementById("templateStudioModal");
+      modal.classList.toggle("hidden");
+    }
+
+    function saveCustomTemplate() {
+      const title = document.getElementById("newTemplateTitle").value.trim();
+      const implants = document.getElementById("newTemplateImplants").value.trim();
+      const body = document.getElementById("newTemplateBody").value.trim();
+
+      if (!title || !body) {
+        alert("Please provide at least a title and a template body skeleton.");
+        return;
+      }
+
+      const templates = getCustomTemplates();
+      templates.push({ title, implants, body });
+      localStorage.setItem("orthoflow_custom_templates", JSON.stringify(templates));
+
+      loadCustomTemplatesIntoDropdown();
+      document.getElementById("templateSelect").value = `custom_${templates.length - 1}`;
+      toggleTemplateStudio();
+      renderTemplateFields();
+      alert(`Saved "${title}" to your operative template suite.`);
+    }
+
+    // --- Multi-Date Screening Queue & Generator ---
+    function onClinicDateChange() {
+      currentClinicDate = document.getElementById("clinicDatePicker").value;
+      updateClinicQueueUI();
+    }
+
+    function getClinicQueue(date) {
+      const stored = localStorage.getItem(`orthoflow_queue_${date}`);
+      return stored ? JSON.parse(stored) : [];
+    }
+
+    function savePatientToClinicList() {
+      const ptName = document.getElementById("ptName").value.trim();
+      const ageGender = document.getElementById("ptAgeGender").value.trim() || "Adult";
+      const tmplSelect = document.getElementById("templateSelect");
+      const moduleName = tmplSelect.options[tmplSelect.selectedIndex].text.split("(")[0].trim();
+      const instructions = document.getElementById("postOpInstructions").value.trim() || "Routine surveillance";
+
+      if (!ptName) {
+        alert("Enter patient name before adding to clinic queue.");
+        return;
+      }
+
+      const queue = getClinicQueue(currentClinicDate);
+      const newPt = {
+        name: ptName,
+        ageGender: ageGender,
+        module: moduleName,
+        planSummary: instructions,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      };
+
+      queue.push(newPt);
+      localStorage.setItem(`orthoflow_queue_${currentClinicDate}`, JSON.stringify(queue));
+      updateClinicQueueUI();
+      alert(`Queued ${ptName} to ${currentClinicDate}`);
+    }
+
+    function updateClinicQueueUI() {
+      const queue = getClinicQueue(currentClinicDate);
+      document.getElementById("clinicCount").innerText = queue.length;
+      document.getElementById("activeDateDisplay").innerText = currentClinicDate;
+      document.getElementById("modalClinicDateHeader").innerText = `Date: ${currentClinicDate} (${queue.length} Patients)`;
+
+      let listText = `CLINIC SCREENING ROSTER - ${currentClinicDate}\n`;
+      listText += `PROVIDER: Dr. Spencer Schulte, MD | DDEAMC\n`;
+      listText += `------------------------------------------------------------\n`;
+
+      if (queue.length === 0) {
+        listText += `No patients queued for this clinic date.\nUse '+ Queue Pt' or scan schedules to add patients.`;
+      } else {
+        queue.forEach((pt, idx) => {
+          listText += `${idx + 1}. ${pt.name} | ${pt.ageGender} | ${pt.module} | ${pt.planSummary}\n`;
+        });
+      }
+      listText += `------------------------------------------------------------`;
+      document.getElementById("screeningListText").value = listText;
+    }
+
+    function toggleScreeningModal() {
+      const modal = document.getElementById("screeningModal");
+      modal.classList.toggle("hidden");
+      if (!modal.classList.contains("hidden")) {
+        updateClinicQueueUI();
+      }
+    }
+
+    function copyScreeningList() {
+      const text = document.getElementById("screeningListText").value;
+      navigator.clipboard.writeText(text).then(() => {
+        const btn = document.getElementById("copyScreeningBtn");
+        btn.innerText = "Copied ✓";
+        setTimeout(() => { btn.innerText = "Copy List"; }, 1500);
+      });
+    }
+
+    function shareScreeningListToKeep() {
+      const text = document.getElementById("screeningListText").value;
+      if (navigator.share) {
+        navigator.share({
+          title: `Clinic Roster - ${currentClinicDate}`,
+          text: text
+        }).catch(() => {});
+      } else {
+        copyScreeningList();
+        alert("Roster copied to clipboard. Paste directly into Google Keep.");
+      }
+    }
+
+    function clearCurrentClinicQueue() {
+      if (confirm(`Clear all queued screening patients for ${currentClinicDate}?`)) {
+        localStorage.removeItem(`orthoflow_queue_${currentClinicDate}`);
+        updateClinicQueueUI();
+      }
+    }
+
+    window.addEventListener("DOMContentLoaded", () => {
+      initKeypad();
+      document.getElementById("clinicDatePicker").value = currentClinicDate;
+      loadCustomTemplatesIntoDropdown();
+      updateClinicQueueUI();
+
+      if (sessionStorage.getItem("orthoflow_unlocked") === "true") {
+        document.getElementById("pinScreen").classList.add("hidden");
+        resetInactivityTimer();
+      }
+      renderTemplateFields();
+    });
+
+    // --- Client-Side Photo OCR & Auto-Router ---
+    async function processImage(input) {
+      if (!input.files || !input.files[0]) return;
+      const file = input.files[0];
+
+      const progressBox = document.getElementById("ocrProgressBox");
+      const progressBar = document.getElementById("ocrProgressBar");
+      const percentText = document.getElementById("ocrPercent");
+      const statusText = document.getElementById("ocrStatusText");
+
+      progressBox.classList.remove("hidden");
+      statusText.innerText = "Initializing OCR engine...";
+      progressBar.style.width = "10%";
+      percentText.innerText = "10%";
+
+      try {
+        const worker = await Tesseract.createWorker("eng");
+        statusText.innerText = "Scanning text...";
+        const ret = await worker.recognize(file, {}, {
+          logger: m => {
+            if (m.status === "recognizing text") {
+              const p = Math.round(m.progress * 100);
+              progressBar.style.width = `${p}%`;
+              percentText.innerText = `${p}%`;
+            }
+          }
+        });
+        await worker.terminate();
+
+        const rawText = ret.data.text;
+        statusText.innerText = "Extracting patient data...";
+        parseOcrText(rawText);
+
+        statusText.innerText = "Scan complete ✓";
+        setTimeout(() => { progressBox.classList.add("hidden"); }, 2000);
+      } catch (err) {
+        statusText.innerText = "Scan failed. Dictate manually.";
+        setTimeout(() => { progressBox.classList.add("hidden"); }, 2500);
+      }
+    }
+
+    function parseOcrText(text) {
+      const nameMatch = text.match(/(?:NAME|PATIENT):\s*([A-Za-z]+,\s*[A-Za-z]+)/i) || 
+                        text.match(/([A-Z][a-z]+,\s+[A-Z][a-z]+)/) ||
+                        text.match(/(?:NAME|PATIENT):\s*([A-Za-z]+\s+[A-Za-z]+)/i);
+      if (nameMatch) {
+        document.getElementById("ptName").value = nameMatch[1].trim();
+      }
+
+      const ageSexMatch = text.match(/(\d{2})\s*(?:yo\s*)?([MF])/i) || 
+                          text.match(/(\d{2})\s*\/\s*([MF])/i);
+      if (ageSexMatch) {
+        document.getElementById("ptAgeGender").value = `${ageSexMatch[1]}${ageSexMatch[2].toUpperCase()}`;
+      }
+
+      const currentDict = document.getElementById("dictationBox").value;
+      document.getElementById("dictationBox").value = (currentDict ? currentDict + "\n\n" : "") + "[OCR EXTRACT]:\n" + text.trim();
+      
+      predictModuleFromText(text);
+
+      if (nameMatch) {
+        lookupPatient();
+      } else {
+        assembleNote();
+      }
+    }
+
+    function predictModuleFromText(text) {
+      const lower = text.toLowerCase();
+      let predictedModule = null;
+
+      if (lower.includes("postop") || lower.includes("post-op") || lower.includes("follow up") || lower.includes("f/u")) {
+        predictedModule = "postop";
+      } else if (lower.includes("painful") || lower.includes("failed") || lower.includes("pji") || lower.includes("loosening")) {
+        predictedModule = "painful_joint";
+      } else if (lower.includes("hip") || lower.includes("groin") || lower.includes("trochanter")) {
+        predictedModule = "new_hip";
+      } else if (lower.includes("knee") || lower.includes("osteoarthritis") || lower.includes("meniscus")) {
+        predictedModule = "new_knee";
+      } else if (lower.includes("phone") || lower.includes("tele") || lower.includes("call") || lower.includes("review")) {
+        predictedModule = "telehealth";
+      } else if (lower.includes("shoulder") || lower.includes("cuff") || lower.includes("labrum")) {
+        predictedModule = "sports";
+      } else if (lower.includes("femur") || lower.includes("hip fx") || lower.includes("neck fx") || lower.includes("intertroch")) {
+        predictedModule = "hip_fx";
+      }
+
+      if (predictedModule) {
+        document.getElementById("templateSelect").value = predictedModule;
+        const badge = document.getElementById("autoRoutedBadge");
+        badge.innerText = `Auto-Routed: ${predictedModule}`;
+        badge.classList.remove("hidden");
+        renderTemplateFields();
+      }
+    }
+
+    // --- Dynamic Wound Closure ---
+    function setClosure(type) {
+      currentClosure = type;
+      ['Default', 'Prineo', 'Prevena'].forEach(name => {
+        const btn = document.getElementById('btnClosure' + name);
+        if (btn) {
+          if (name.toLowerCase() === type) {
+            btn.className = "py-2 px-1 rounded-xl text-center border text-[11px] font-medium border-blue-500 bg-blue-600/20 text-white";
+          } else {
+            btn.className = "py-2 px-1 rounded-xl text-center border text-[11px] font-medium border-slate-800 bg-slate-950 text-slate-400";
+          }
+        }
+      });
+      assembleNote();
+    }
+
+    function getClosureText() {
+      if (currentClosure === 'prineo') return "Deep dermal closure with 3-0 Stratafix, Dermabond Prineo topical mesh tape, and bordered Mepilex dressing.";
+      if (currentClosure === 'prevena') return "Deep layers reapproximated with 3-0 Stratafix. Prevena closed-incision negative pressure therapy (ciNPT) dressing applied at -125 mmHg continuous suction. Patient instructed on 7-day battery life and peel-off protocol.";
+      return "Fascia and subcutaneous tissues closed with barbed 3-0 Stratafix. Skin reapproximated with Sylke suture strips and sterile Aquacel Ag surgical barrier dressing.";
+    }
+
+    // --- Dynamic Form Renderer ---
+    function renderTemplateFields() {
+      const type = document.getElementById("templateSelect").value;
+      const form = document.getElementById("dynamicForm");
+      let html = "";
+
+      if (type.startsWith("custom_")) {
+        const idx = parseInt(type.split("_")[1]);
+        const customTmpl = getCustomTemplates()[idx];
+        html = `
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Procedure</label>
+              <input id="opCustomTitle" type="text" value="${customTmpl.title}" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+            </div>
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Implants Used</label>
+              <input id="opImplants" type="text" value="${customTmpl.implants || 'Documented'}" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">EBL</label>
+              <input id="opEbl" type="text" value="100 cc" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+            </div>
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Approach</label>
+              <input id="opCustomApp" type="text" value="Standard surgical approach" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+            </div>
+          </div>
+        `;
+      } else if (type === "new_hip") {
+        html = `
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Laterality</label>
+              <select id="lat" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+                <option value="Right">Right</option><option value="Left">Left</option><option value="Bilateral">Bilateral</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Primary Etiology</label>
+              <select id="etiology" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+                <option value="Primary Osteoarthritis">Primary Osteoarthritis (KL 4)</option>
+                <option value="Avascular Necrosis">Avascular Necrosis (Stage III/IV)</option>
+                <option value="Developmental Dysplasia">Developmental Dysplasia</option>
+              </select>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Internal Rotation (90°)</label>
+              <input id="hipIR" type="text" value="5°" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+            </div>
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Flexion Contracture</label>
+              <input id="hipFC" type="text" value="0°" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+            </div>
+          </div>
+        `;
+      } else if (type === "new_knee") {
+        html = `
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Laterality</label>
+              <select id="lat" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+                <option value="Right">Right</option><option value="Left">Left</option><option value="Bilateral">Bilateral</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Compartment</label>
+              <select id="kneeComp" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+                <option value="Tricompartmental">Tricompartmental (TKA candidate)</option>
+                <option value="Isolated Medial">Isolated Medial (Oxford UKA candidate)</option>
+                <option value="Patellofemoral">Patellofemoral Predominant</option>
+              </select>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Knee ROM</label>
+              <input id="kneeROM" type="text" value="0° - 110°" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+            </div>
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Stability Exam</label>
+              <input id="kneeStab" type="text" value="Stable varus/valgus, intact ACL" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+            </div>
+          </div>
+        `;
+      } else if (type === "painful_joint") {
+        html = `
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Joint & Laterality</label>
+              <input id="jointId" type="text" value="Right Total Knee Arthroplasty" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+            </div>
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Pain-Free Interval</label>
+              <input id="pfi" type="text" value="5-year pain-free interval prior to acute onset" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Serologies (ESR / CRP)</label>
+              <input id="pjiLabs" type="text" value="ESR: 14 mm/hr | CRP: 2.1 mg/L" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+            </div>
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Synovial Aspiration</label>
+              <input id="pjiAsp" type="text" value="WBC: 850 /mcL, 22% PMN, LE neg" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+            </div>
+          </div>
+        `;
+      } else if (type === "postop") {
+        html = `
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Post-Op Interval</label>
+              <select id="postopInterval" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+                <option value="2-Week">2-Week Incision & Motion Check</option>
+                <option value="6-Week">6-Week Milestone & Radiographs</option>
+                <option value="12-Week">12-Week Functional Progress</option>
+                <option value="1-Year">1-Year Annual Surveillance</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Incision Appearance</label>
+              <input id="postopIncision" type="text" value="Clean, dry, intact; no erythema or drainage" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+            </div>
+          </div>
+        `;
+      } else if (type === "sports") {
+        html = `
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Region</label>
+              <select id="sportsRegion" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+                <option value="Knee">Knee (ACL/Meniscus)</option>
+                <option value="Shoulder">Shoulder (Cuff/Labrum)</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Injury Mechanism</label>
+              <input id="sportsMech" type="text" value="Non-contact pivot injury with audible pop & immediate effusion" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Special Tests</label>
+              <input id="sportsTests" type="text" value="Lachman 2B, Pivot Shift positive, McMurray medial line tenderness" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+            </div>
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">MRI Review</label>
+              <input id="sportsMri" type="text" value="Complete mid-substance ACL tear, medial meniscus tear" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+            </div>
+          </div>
+        `;
+      } else if (type === "hip_fx") {
+        html = `
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Classification</label>
+              <select id="hipFxType" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+                <option value="Displaced Femoral Neck">Displaced Femoral Neck (Garden IV)</option>
+                <option value="Intertrochanteric (Stable)">Intertrochanteric (Stable 2-part)</option>
+                <option value="Intertrochanteric (Unstable)">Intertrochanteric (Unstable / Reverse Obliquity)</option>
+                <option value="Subtrochanteric">Subtrochanteric</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Surgical Plan</label>
+              <select id="hipFxPlan" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+                <option value="Bipolar Hemiarthroplasty">Bipolar Hemiarthroplasty (Direct Anterior)</option>
+                <option value="Total Hip Arthroplasty">Total Hip Arthroplasty</option>
+                <option value="Cephalomedullary Nail">Cephalomedullary Nail (Stryker Gamma4 / Synthes TFNA)</option>
+                <option value="Cannulated Screws">Percutaneous Cannulated Screws</option>
+              </select>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Anticoagulation</label>
+              <input id="hipFxCoag" type="text" value="Eliquis held at ED presentation; cleared for OR tomorrow AM" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+            </div>
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Regional Block</label>
+              <input id="hipFxBlock" type="text" value="Fascia Iliaca Compartment Block performed in ED" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+            </div>
+          </div>
+        `;
+      } else if (type === "gen_fx") {
+        html = `
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Injury</label>
+              <input id="genFxInjury" type="text" value="Right Distal Radius / Ankle Fracture" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+            </div>
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Status</label>
+              <input id="genFxClass" type="text" value="Closed, Gustilo-Anderson 0, compartments soft" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Reduction & Splint</label>
+              <input id="genFxSplint" type="text" value="Closed reduction under hematoma block, sugar-tong splint applied" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+            </div>
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Disposition</label>
+              <input id="genFxDisp" type="text" value="Discharged from ED; clinic follow-up in 5 days" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+            </div>
+          </div>
+        `;
+      } else if (type === "telehealth") {
+        html = `
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Billing Code</label>
+              <select id="teleCode" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+                <option value="99442 (11-20 min medical discussion)">99442 (11-20 min)</option>
+                <option value="99441 (5-10 min medical discussion)">99441 (5-10 min)</option>
+                <option value="99443 (21-30 min medical discussion)">99443 (21-30 min)</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Reason for Call</label>
+              <input id="teleReason" type="text" value="Review of Diagnostic MRI & Lab Cultures" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+            </div>
+          </div>
+        `;
+      } else if (type === "op_da_tha") {
+        html = `
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Incision Style</label>
+              <select id="opDaInc" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+                <option value="Bikini (Oblique Groin Crease)">Bikini (Oblique Groin Crease)</option>
+                <option value="Standard Longitudinal Direct Anterior">Standard Longitudinal DA</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Stem Fixation (Zimmer Biomet)</label>
+              <select id="opDaStem" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+                <option value="Zimmer Biomet Z1 Collared Pressfit Stem">ZB Z1 Collared Pressfit Stem</option>
+                <option value="Zimmer Biomet Z1 Cemented Stem">ZB Z1 Cemented Stem</option>
+              </select>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Implants Detailed</label>
+              <input id="opImplants" type="text" value="Zimmer Biomet: Z1 Stem Size 7 Standard Offset, G7 54mm OsseoTi Cup, 36mm +0 Delta Head, E1 Poly" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+            </div>
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">EBL</label>
+              <input id="opEbl" type="text" value="100 cc" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+            </div>
+          </div>
+        `;
+      } else if (type === "op_primary_tka") {
+        html = `
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Constraint (Zimmer Biomet)</label>
+              <select id="opTkaConst" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+                <option value="Persona Cruciate Retaining (CR)">Persona CR (Cruciate Retaining)</option>
+                <option value="Persona Posterior Stabilized (PS)">Persona PS (Posterior Stabilized)</option>
+                <option value="Persona Medial Congruent (MC)">Persona MC (Medial Congruent)</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Patella Resurfacing</label>
+              <select id="opTkaPatella" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+                <option value="Resurfaced (Persona 3-peg cemented)">Resurfaced (Persona 3-peg cemented)</option>
+                <option value="Patelloplasty (Unresurfaced)">Patelloplasty (Unresurfaced)</option>
+              </select>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Implants Detailed</label>
+              <input id="opImplants" type="text" value="Zimmer Biomet Persona: Femur Size 7, Tibia Size E Cemented, 10mm CR Poly, 32mm Patella" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+            </div>
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">EBL</label>
+              <input id="opEbl" type="text" value="50 cc" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+            </div>
+          </div>
+        `;
+      } else if (type === "op_hip_hemi") {
+        html = `
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Approach</label>
+              <select id="opHemiApp" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+                <option value="Direct Anterior">Direct Anterior (DA)</option>
+                <option value="Posterolateral">Posterolateral</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Stem Fixation</label>
+              <select id="opHemiStem" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+                <option value="Zimmer Biomet Z1 Collared Pressfit">ZB Z1 Collared Pressfit</option>
+                <option value="Zimmer Biomet CPT / Z1 Cemented">ZB CPT / Z1 Cemented</option>
+              </select>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Implants Detailed</label>
+              <input id="opImplants" type="text" value="Zimmer Biomet: Z1 Collared Stem, 44mm Bipolar Outer Head with 28mm +0 CoCr Inner Head" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+            </div>
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">EBL</label>
+              <input id="opEbl" type="text" value="100 cc" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+            </div>
+          </div>
+        `;
+      } else if (type === "op_stage1_pji") {
+        html = `
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Spacer Type</label>
+              <select id="opStage1Spacer" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+                <option value="Articulating Antibiotic Cement Spacer">Articulating Antibiotic Spacer</option>
+                <option value="Static High-Dose Antibiotic Cement Block">Static High-Dose Spacer Block</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Antibiotic Load</label>
+              <input id="opStage1Abx" type="text" value="3g Vancomycin + 2.4g Tobramycin per 40g Simplex cement batch" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Explant Details</label>
+              <input id="opImplants" type="text" value="Complete explantation of femoral and acetabular/tibial components, thorough radical synovectomy" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+            </div>
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">EBL</label>
+              <input id="opEbl" type="text" value="250 cc" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+            </div>
+          </div>
+        `;
+      } else if (type === "op_rev_tka") {
+        html = `
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Regional IO Antibiotic</label>
+              <input id="opIoVanc" type="text" value="1g Vancomycin in 100mL saline via proximal tibial intraosseous line" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+            </div>
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Explant Liner</label>
+              <input id="opExplant" type="text" value="Zimmer Biomet Persona 10mm PS Polyethylene Liner (atraumatically removed)" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">New Implant Liner</label>
+              <input id="opImplants" type="text" value="Zimmer Biomet Persona: 14mm Constrained Condylar (CCK) Polyethylene Liner" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+            </div>
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">EBL</label>
+              <input id="opEbl" type="text" value="75 cc" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+            </div>
+          </div>
+        `;
+      } else if (type === "op_lat_plateau") {
+        html = `
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Implant System</label>
+              <select id="opPlateauSys" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+                <option value="Synthes 3.5mm LPHP (Variable Angle)">Synthes 3.5mm VA-LPHP</option>
+                <option value="Stryker AxSOS 3 Proximal Lateral Plate">Stryker AxSOS 3 Lateral Plate</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Subchondral Raft</label>
+              <input id="opPlateauGraft" type="text" value="Subchondral raft screw construct with allograft cancellous croutons" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Construct</label>
+              <input id="opImplants" type="text" value="Synthes 3.5mm Anterolateral Proximal Tibial Plate (6-hole) with subchondral raft screws" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+            </div>
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">EBL</label>
+              <input id="opEbl" type="text" value="100 cc" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+            </div>
+          </div>
+        `;
+      } else if (type === "op_med_plateau") {
+        html = `
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Approach</label>
+              <input id="opMedApproach" type="text" value="Lobonhoffer / Posteromedial approach with 3.5mm T-buttress plate" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+            </div>
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Implants</label>
+              <input id="opImplants" type="text" value="Synthes / Stryker 3.5mm Low Profile Posteromedial Buttress Plate" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Reduction</label>
+              <input id="opMedRed" type="text" value="Anatomic apex and articular reduction confirmed via fluoroscopy" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+            </div>
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">EBL</label>
+              <input id="opEbl" type="text" value="75 cc" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+            </div>
+          </div>
+        `;
+      } else if (type === "op_bicondylar_plateau") {
+        html = `
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Construct</label>
+              <input id="opBiconConstruct" type="text" value="Dual incision: Anterolateral raft plate + Posteromedial buttress plate" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+            </div>
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Hardware</label>
+              <input id="opImplants" type="text" value="Synthes / Stryker: Lateral 3.5mm VA-LPHP plate + Medial 3.5mm LCDCP buttress plate" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">EBL</label>
+              <input id="opEbl" type="text" value="150 cc" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+            </div>
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Reduction</label>
+              <input id="opBiconRed" type="text" value="Direct visualization via submeniscal arthrotomy, subchondral raft rigid fixation" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+            </div>
+          </div>
+        `;
+      } else if (type === "op_clavicle") {
+        html = `
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Plate Position</label>
+              <select id="opClavPos" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+                <option value="Superior Precontoured (Synthes / Stryker)">Superior Precontoured (Synthes / Stryker)</option>
+                <option value="Anteroinferior Precontoured">Anteroinferior Precontoured</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Implants Detailed</label>
+              <input id="opImplants" type="text" value="Synthes 2.7mm/3.5mm VA Clavicle Plate (7-hole) with lag screw technique" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">EBL</label>
+              <input id="opEbl" type="text" value="25 cc" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+            </div>
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Supraclavicular Nerves</label>
+              <input id="opClavNerve" type="text" value="Supraclavicular cutaneous branches mobilized and carefully protected" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+            </div>
+          </div>
+        `;
+      } else if (type === "op_femur_fx") {
+        html = `
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Fixation Construct</label>
+              <input id="opFemurConst" type="text" value="Lateral Locking Periprosthetic Plate + Proximal Dall-Miles / Cerclage Cables" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+            </div>
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Implant Systems</label>
+              <input id="opImplants" type="text" value="Stryker AxSOS 3 / Synthes VA-LCP Periprosthetic Plate + 2x Cerclage Cables" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Stem Stability</label>
+              <input id="opFemurStem" type="text" value="Underlying femoral arthroplasty stem inspected and confirmed solidly fixed (Vancouver B1)" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+            </div>
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">EBL</label>
+              <input id="opEbl" type="text" value="150 cc" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+            </div>
+          </div>
+        `;
+      }
+
+      form.innerHTML = html;
+      assembleNote();
+    }
+
+    // --- Registry Lookup & Matchmaker ---
+    async function lookupPatient() {
+      const name = document.getElementById("ptName").value.trim();
+      if (!name) return;
+
+      const btn = document.getElementById("matchBtn");
+      const alertBox = document.getElementById("matchAlert");
+      btn.innerText = "Querying...";
+
+      try {
+        const response = await fetch(`${WEBHOOK_URL}?name=${encodeURIComponent(name)}`);
+        const data = await response.json();
+
+        if (data && data.found) {
+          matchedCaseData = data;
+          document.getElementById("templateSelect").value = "postop";
+          const badge = document.getElementById("autoRoutedBadge");
+          badge.innerText = "Registry Matched: Post-Op";
+          badge.classList.remove("hidden");
+          renderTemplateFields();
+
+          if (data.postOpInstructions) {
+            document.getElementById("postOpInstructions").value = data.postOpInstructions;
+          }
+
+          const isNonRoutine = data.postOpInstructions && 
+            !data.postOpInstructions.toLowerCase().includes("routine") &&
+            data.postOpInstructions.length > 5;
+
+          alertBox.className = isNonRoutine 
+            ? "mt-3 p-3 rounded-xl border border-amber-500/50 bg-amber-950/30 text-amber-300"
+            : "mt-3 p-3 rounded-xl border border-emerald-500/50 bg-emerald-950/30 text-emerald-300";
+
+          alertBox.innerHTML = `
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-xs font-bold uppercase tracking-wider">Verified Registry Post-Op</span>
+              <span class="text-[11px] font-mono">DOS: ${data.dos || 'Recent'}</span>
+            </div>
+            <p class="text-xs text-slate-200">s/p ${data.laterality || ''} ${data.procedure || 'Procedure'}</p>
+            <p class="text-[11px] text-slate-400">Implants: ${data.implants || 'Documented in OR note'}</p>
+            ${isNonRoutine ? `<div class="mt-2 text-xs font-semibold text-amber-400 bg-amber-900/40 p-2 rounded-lg border border-amber-600/40">⚠ PROTOCOL ALERT: ${data.postOpInstructions}</div>` : ''}
+          `;
+          alertBox.classList.remove("hidden");
+          assembleNote();
+        } else {
+          alertBox.className = "mt-3 p-3 rounded-xl border border-slate-800 bg-slate-950 text-slate-400 text-xs";
+          alertBox.innerText = "No prior surgical registry entry found for this patient.";
+          alertBox.classList.remove("hidden");
+        }
+      } catch (err) {
+      } finally {
+        btn.innerText = "Match Registry";
+      }
+    }
+
+    // --- Registry Post (doPost) ---
+    async function logToRegistry() {
+      const btn = document.getElementById("logRegistryBtn");
+      const ptName = document.getElementById("ptName").value.trim();
+
+      if (!ptName) {
+        alert("Enter patient name before logging to registry.");
+        return;
+      }
+
+      btn.innerText = "Logging...";
+      btn.disabled = true;
+
+      const type = document.getElementById("templateSelect").value;
+      let procName = type;
+      let approach = "Standard";
+
+      if (type.startsWith("custom_")) {
+        procName = document.getElementById("opCustomTitle") ? document.getElementById("opCustomTitle").value : "Custom Procedure";
+        approach = document.getElementById("opCustomApp") ? document.getElementById("opCustomApp").value : "Standard";
+      } else if (type === "op_da_tha") {
+        procName = "Direct Anterior Total Hip Arthroplasty";
+        approach = document.getElementById("opDaInc") ? document.getElementById("opDaInc").value : "Direct Anterior";
+      } else if (type === "op_primary_tka") {
+        procName = "Primary Total Knee Arthroplasty";
+        approach = "Medial Parapatellar";
+      } else if (type === "op_hip_hemi") {
+        procName = "Bipolar Hip Hemiarthroplasty";
+        approach = document.getElementById("opHemiApp") ? document.getElementById("opHemiApp").value : "Direct Anterior";
+      } else if (type === "op_rev_tka") {
+        procName = "Revision TKA - Isolated Liner Exchange";
+        approach = "Medial Parapatellar";
+      } else if (type === "op_lat_plateau") {
+        procName = "Lateral Tibial Plateau ORIF";
+        approach = "Anterolateral";
+      } else if (type === "op_med_plateau") {
+        procName = "Medial Tibial Plateau ORIF";
+        approach = "Posteromedial";
+      } else if (type === "op_bicondylar_plateau") {
+        procName = "Bicondylar Tibial Plateau ORIF";
+        approach = "Dual Incision (Anterolateral + Posteromedial)";
+      } else if (type === "op_clavicle") {
+        procName = "Clavicle Shaft ORIF";
+        approach = "Direct Superior / Anteroinferior";
+      }
+
+      const payload = {
+        dos: new Date().toLocaleDateString(),
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        patientName: ptName,
+        ageGender: document.getElementById("ptAgeGender").value || "Adult",
+        procedure: procName,
+        laterality: "Operative",
+        approach: approach,
+        implants: document.getElementById("opImplants") ? document.getElementById("opImplants").value : "Documented",
+        closure: getClosureText(),
+        ebl: document.getElementById("opEbl") ? document.getElementById("opEbl").value : "100 cc",
+        postOpInstructions: document.getElementById("postOpInstructions").value || "Routine postoperative protocol."
+      };
+
+      try {
+        await fetch(WEBHOOK_URL, {
+          method: "POST",
+          mode: "no-cors",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        btn.innerText = "Logged ✓";
+        btn.classList.remove("bg-blue-600");
+        btn.classList.add("bg-emerald-600");
+        setTimeout(() => {
+          btn.innerText = "Log Case";
+          btn.classList.remove("bg-emerald-600");
+          btn.classList.add("bg-blue-600");
+          btn.disabled = false;
+        }, 2000);
+      } catch (err) {
+        alert("Error submitting case to Google Sheets.");
+        btn.innerText = "Log Case";
+        btn.disabled = false;
+      }
+    }
+
+    // --- Master Note Assembler (With Dynamic In-App Custom Support) ---
+    function assembleNote() {
+      const type = document.getElementById("templateSelect").value;
+      const ptName = document.getElementById("ptName").value || "[Patient Name]";
+      const ageGender = document.getElementById("ptAgeGender").value || "[Age/Gender]";
+      const instructions = document.getElementById("postOpInstructions").value || "Routine protocol.";
+      const rawDictation = document.getElementById("dictationBox").value;
+      let note = "";
+
+      if (type.startsWith("custom_")) {
+        const idx = parseInt(type.split("_")[1]);
+        const customTmpl = getCustomTemplates()[idx];
+        const ebl = document.getElementById("opEbl") ? document.getElementById("opEbl").value : "100 cc";
+        const implants = document.getElementById("opImplants") ? document.getElementById("opImplants").value : (customTmpl.implants || "Documented");
+
+        // Parse custom skeleton tags
+        note = customTmpl.body
+          .replace(/{PATIENT_NAME}/g, ptName)
+          .replace(/{AGE_GENDER}/g, ageGender)
+          .replace(/{DATE}/g, new Date().toLocaleDateString())
+          .replace(/{SURGEON}/g, "Dr. Spencer Schulte, MD")
+          .replace(/{HOSPITAL}/g, "Dwight D. Eisenhower Army Medical Center (DDEAMC)")
+          .replace(/{EBL}/g, ebl)
+          .replace(/{IMPLANTS}/g, implants)
+          .replace(/{CLOSURE}/g, getClosureText())
+          .replace(/{PRECAUTIONS}/g, instructions)
+          .replace(/{DICTATION}/g, rawDictation || "Routine course without complication.");
+
+      } else if (type === "new_hip") {
+        const lat = document.getElementById("lat") ? document.getElementById("lat").value : "Right";
+        const eti = document.getElementById("etiology") ? document.getElementById("etiology").value : "Primary OA";
+        const ir = document.getElementById("hipIR") ? document.getElementById("hipIR").value : "5°";
+        const fc = document.getElementById("hipFC") ? document.getElementById("hipFC").value : "0°";
+        note = `ADULT RECONSTRUCTION CLINICAL CONSULTATION - NEW HIP\nPATIENT: ${ptName} | DEMOGRAPHICS: ${ageGender}\nDATE: ${new Date().toLocaleDateString()}\nATTENDING SURGEON: Dr. Spencer Schulte, MD (Adult Reconstruction)\nHOSPITAL: Dwight D. Eisenhower Army Medical Center (DDEAMC)\n\nSUBJECTIVE:\nPatient presents for evaluation of debilitating ${lat} hip pain secondary to ${eti}. Reports severe groin and startup discomfort, worsening with prolonged ambulation and limiting activities of daily living (difficulty donning shoes and socks). Exhausted conservative therapies including NSAIDs, activity modification, and PT.\n\nPHYSICAL EXAMINATION:\nGait: Antalgic gait favoring the ${lat} lower extremity.\n${lat} Hip Range of Motion:\n- Flexion: 100° with terminal discomfort.\n- Flexion Contracture: ${fc}.\n- Internal Rotation at 90°: ${ir} (severely restricted, reproduces groin pain).\n- Stinchfield Test: Positive. Log Roll: Positive groin discomfort.\n- Distal Neurovascular: DP and PT pulses 2+ and symmetric. Sensation intact in L2-S1 distributions.\n\nRADIOGRAPHIC ASSESSMENT:\nAP Pelvis, Cross-Table Lateral, Frog-Leg Lateral:\n- Marked joint space narrowing, dense subchondral sclerosis, osteophyte formation, and subchondral cyst change consistent with end-stage ${eti}.\n\nASSESSMENT & PLAN:\n1. End-stage degenerative joint disease of the ${lat} hip.\n2. Discussed conservative options vs surgical reconstruction.\n3. Patient elects to proceed with Direct Anterior Total Hip Arthroplasty (DA-THA). Reviewed muscle-sparing intermuscular interval, fluoroscopic guidance, rapid recovery, and risks (infection, periprosthetic fracture, dislocation, LFCN neuropraxia, DVT).\n4. Preoperative surgical clearance initiated.\n\nADDITIONAL CLINICAL NOTES:\n${rawDictation || 'None.'}`;
+      } else if (type === "new_knee") {
+        const lat = document.getElementById("lat") ? document.getElementById("lat").value : "Right";
+        const comp = document.getElementById("kneeComp") ? document.getElementById("kneeComp").value : "Tricompartmental";
+        const rom = document.getElementById("kneeROM") ? document.getElementById("kneeROM").value : "0-110°";
+        const stab = document.getElementById("kneeStab") ? document.getElementById("kneeStab").value : "Stable";
+        note = `ADULT RECONSTRUCTION CLINICAL CONSULTATION - NEW KNEE\nPATIENT: ${ptName} | DEMOGRAPHICS: ${ageGender}\nDATE: ${new Date().toLocaleDateString()}\nATTENDING SURGEON: Dr. Spencer Schulte, MD\nHOSPITAL: DDEAMC\n\nSUBJECTIVE:\nChronic progressive ${lat} knee pain consistent with ${comp} degenerative arthritis. Reports pain with stairs, mechanical crepitation, and decline in walking tolerance. Corticosteroid/viscosupplementation injections and therapy provided minimal relief.\n\nEXAM:\nAlignment: Mild varus alignment without gross thrust. ROM: ${rom}.\nJoint line tenderness localized medially. Stability: ${stab}.\nDistal Neurovascular: DP/PT palpable, motor/sensory intact.\n\nRADIOGRAPHS (Weight-Bearing AP/Lat/Rosenberg/Sunrise):\nAdvanced joint space narrowing, subchondral sclerosis, and osteophytes.\n\nASSESSMENT & PLAN:\n1. End-stage osteoarthritis of the ${lat} knee (${comp}).\n2. Indicated for joint arthroplasty (TKA vs UKA based on compartment status). Preoperative workup ordered.\n\nADDITIONAL NOTES:\n${rawDictation || 'None.'}`;
+      } else if (type === "painful_joint") {
+        const joint = document.getElementById("jointId") ? document.getElementById("jointId").value : "Right Total Knee Arthroplasty";
+        const pfi = document.getElementById("pfi") ? document.getElementById("pfi").value : "Interval";
+        const labs = document.getElementById("pjiLabs") ? document.getElementById("pjiLabs").value : "Labs pending";
+        const asp = document.getElementById("pjiAsp") ? document.getElementById("pjiAsp").value : "Aspiration pending";
+        note = `EVALUATION OF THE PAINFUL / FAILED TOTAL JOINT ARTHROPLASTY\nPATIENT: ${ptName} | DEMOGRAPHICS: ${ageGender}\nDATE: ${new Date().toLocaleDateString()}\nATTENDING SURGEON: Dr. Spencer Schulte, MD (Adult Reconstruction)\n\nSUBJECTIVE & INDEX HISTORY:\nEvaluation of painful ${joint}. Course: ${pfi}.\nInstability, startup discomfort, and functional decline evaluated. No acute bacteremia or wound breakdown reported.\n\nPERIPROSTHETIC JOINT INFECTION (PJI) EXCLUSION WORKUP:\n- Serum Biomarkers: ${labs}\n- Synovial Fluid Aspiration: ${asp}\n- Interpretation: Evaluated per ICM / MSIS diagnostic criteria.\n\nPLAN:\n1. Rule out indolent PJI pending complete synovial cultures.\n2. Surgical reconstruction pathway (isolated liner exchange vs revision arthroplasty) tailored to culture and mechanical findings.\n\nNOTES:\n${rawDictation || 'None.'}`;
+      } else if (type === "postop") {
+        const dos = matchedCaseData ? matchedCaseData.dos : "[DOS]";
+        const proc = matchedCaseData ? `${matchedCaseData.laterality || ''} ${matchedCaseData.procedure || 'Joint Arthroplasty'}` : "[Index Procedure]";
+        const implants = matchedCaseData ? matchedCaseData.implants : "[Implant Construct]";
+        const interval = document.getElementById("postopInterval") ? document.getElementById("postopInterval").value : "Follow-Up";
+        const incEx = document.getElementById("postopIncision") ? document.getElementById("postopIncision").value : "Clean, dry, intact";
+        note = `POST-OPERATIVE CLINICAL SURVEILLANCE NOTE (${interval.toUpperCase()})\nPATIENT: ${ptName} | DEMOGRAPHICS: ${ageGender}\nDATE: ${new Date().toLocaleDateString()}\nATTENDING SURGEON: Dr. Spencer Schulte, MD (Adult Reconstruction)\nHOSPITAL: DDEAMC\n\nINDEX SURGICAL HISTORY (REGISTRY MATCHED):\nPatient presents for scheduled ${interval} evaluation s/p ${proc} performed on ${dos}.\nOperative Implants: ${implants}.\nIndex Closure: Incision closed with barbed Stratafix and protective surgical barrier.\n\nINTERVAL HISTORY & RECOVERY:\nPatient reports well-managed discomfort. Has adhered to postoperative mobilization milestones and chemoprophylaxis protocol. Tolerating prescribed physical therapy exercises.\n\nPHYSICAL EXAMINATION:\n- Surgical Incision: ${incEx}.\n- Active/Passive ROM: Progressing satisfactorily without guarded motion block.\n- Neurovascular & DVT Screen: Calves soft, nontender, negative Homan's. Distal pulses (DP/PT) 2+ and symmetric. Light touch sensation intact distally.\n\nOPERATIVE PROTOCOL VERIFICATION:\n- Logged Precautions: ${instructions}\n- Protocol Adherence: Confirmed compliant with weight bearing, movement precautions, or wound dressings.\n\nRADIOGRAPHIC ASSESSMENT:\nOrthogonal postoperative radiographs demonstrate anatomical component position, intact interface without radiolucencies, and no subsidence.\n\nASSESSMENT & PLAN:\n1. Satisfactory progress s/p ${proc}.\n2. Advance physical therapy and weight bearing as tolerated.\n3. Follow-up interval confirmed.\n\nADDITIONAL CLINICAL NOTES:\n${rawDictation || 'None.'}`;
+      } else if (type === "sports") {
+        const reg = document.getElementById("sportsRegion") ? document.getElementById("sportsRegion").value : "Knee";
+        const mech = document.getElementById("sportsMech") ? document.getElementById("sportsMech").value : "Trauma";
+        const tests = document.getElementById("sportsTests") ? document.getElementById("sportsTests").value : "Positive";
+        const mri = document.getElementById("sportsMri") ? document.getElementById("sportsMri").value : "Pending";
+        note = `SPORTS MEDICINE CLINICAL CONSULTATION\nPATIENT: ${ptName} | DEMOGRAPHICS: ${ageGender}\nDATE: ${new Date().toLocaleDateString()}\nPROVIDER: Dr. Spencer Schulte, MD\n\nHISTORY OF PRESENT ILLNESS:\nEvaluation of acute ${reg} sports injury. Mechanism: ${mech}.\n\nPHYSICAL EXAMINATION:\nTargeted provocative testing (${reg}): ${tests}.\nDistal neurovascular status intact.\n\nDIAGNOSTIC IMAGING:\nRadiographs and MRI review: ${mri}.\n\nASSESSMENT & PLAN:\n1. Acute ${reg} ligamentous / intra-articular pathology.\n2. Discussed conservative management with hinged bracing/PT vs arthroscopic surgical reconstruction.\n\nNOTES:\n${rawDictation || 'None.'}`;
+      } else if (type === "hip_fx") {
+        const fxType = document.getElementById("hipFxType") ? document.getElementById("hipFxType").value : "Femoral Neck";
+        const plan = document.getElementById("hipFxPlan") ? document.getElementById("hipFxPlan").value : "Hemiarthroplasty";
+        const coag = document.getElementById("hipFxCoag") ? document.getElementById("hipFxCoag").value : "Cleared";
+        const blk = document.getElementById("hipFxBlock") ? document.getElementById("hipFxBlock").value : "FIB";
+        note = `INPATIENT ORTHOPAEDIC CONSULTATION - GERIATRIC HIP FRACTURE\nPATIENT: ${ptName} | DEMOGRAPHICS: ${ageGender}\nDATE: ${new Date().toLocaleDateString()}\nCONSULTANT: Dr. Spencer Schulte, MD\n\nHPI & INJURY ASSESSMENT:\nInpatient evaluation for low-energy fall resulting in ${fxType} hip fracture.\nMedical Clearance & Anticoagulation: ${coag}.\n\nEXAM:\nLower extremity shortened and externally rotated. Skin intact. Compartments soft. Distal pulses palpable.\nPain Control: ${blk}.\n\nPLAN:\n1. Surgical Stabilization: Plan for urgent ${plan} within 24-48 hours.\n2. Preoperative DVT prophylaxis and medical optimization per fragile hip fracture pathway.\n\nNOTES:\n${rawDictation || 'None.'}`;
+      } else if (type === "gen_fx") {
+        const injury = document.getElementById("genFxInjury") ? document.getElementById("genFxInjury").value : "Fracture";
+        const cls = document.getElementById("genFxClass") ? document.getElementById("genFxClass").value : "Closed";
+        const spl = document.getElementById("genFxSplint") ? document.getElementById("genFxSplint").value : "Splint";
+        const disp = document.getElementById("genFxDisp") ? document.getElementById("genFxDisp").value : "Clinic";
+        note = `EMERGENCY / INPATIENT ORTHOPAEDIC FRACTURE CONSULT\nPATIENT: ${ptName} | DEMOGRAPHICS: ${ageGender}\nDATE: ${new Date().toLocaleDateString()}\nCONSULTANT: Dr. Spencer Schulte, MD\n\nCLINICAL ASSESSMENT:\nEvaluation of acute ${injury}. Classification: ${cls}.\nExam: Compartments soft and compressible. Distal motor and sensory intact. Distal pulses 2+.\n\nINTERVENTION:\n${spl}.\nPost-reduction radiographs evaluated and demonstrate acceptable alignment.\n\nPLAN & DISPOSITION:\n1. ${disp}.\n2. Instructions: Non-weight bearing/elevation. Return precautions for paresthesias or compartment tightness.\n\nNOTES:\n${rawDictation || 'None.'}`;
+      } else if (type === "telehealth") {
+        const code = document.getElementById("teleCode") ? document.getElementById("teleCode").value : "99442";
+        const reason = document.getElementById("teleReason") ? document.getElementById("teleReason").value : "Diagnostic Review";
+        note = `MSK TELEPHONE ENCOUNTER (BILLING & INSURANCE COMPLIANT)\nPATIENT: ${ptName} | DEMOGRAPHICS: ${ageGender}\nDATE: ${new Date().toLocaleDateString()}\nPROVIDER: Dr. Spencer Schulte, MD\n\nREGULATORY COMPLIANCE DOCUMENTATION:\n- Modality: Synchronized two-way audio-only medical telecommunications encounter.\n- Service & Duration: ${code}.\n- Originating Service Rule: This encounter does NOT originate from an evaluation and management service provided within the previous 7 days, nor does it lead to an urgent E/M service or procedure within the next 24 hours.\n- Location & Consent: Patient was at their private residence. Explicit verbal consent for a medical telephone visit was obtained, including counseling that this service will be billed to insurance.\n\nCLINICAL REASON FOR CALL:\n${reason}.\n\nSUBJECTIVE & INTERVAL HISTORY:\nReviewed musculoskeletal symptom trajectory, functional ambulation, and tolerance of medications/bracing.\n\nDIAGNOSTIC REVIEW & FINDINGS:\nDetailed review of diagnostic imaging, synovial aspiration cultures, and/or laboratory biomarkers directly with patient.\n\nASSESSMENT & PLAN:\n1. Management Plan: Treatment recommendations discussed and agreed upon.\n2. Follow-Up: Follow-up interval established with explicit return precautions reviewed.\n\nNOTES:\n${rawDictation || 'None.'}`;
+      } else if (type === "op_da_tha") {
+        const inc = document.getElementById("opDaInc") ? document.getElementById("opDaInc").value : "Bikini";
+        const stem = document.getElementById("opDaStem") ? document.getElementById("opDaStem").value : "Z1";
+        const implants = document.getElementById("opImplants") ? document.getElementById("opImplants").value : "Implants";
+        const ebl = document.getElementById("opEbl") ? document.getElementById("opEbl").value : "100 cc";
+        note = `OPERATIVE REPORT\nPATIENT: ${ptName} | DEMOGRAPHICS: ${ageGender}\nDATE OF SURGERY: ${new Date().toLocaleDateString()}\nSURGEON: Dr. Spencer Schulte, MD\nHOSPITAL: Dwight D. Eisenhower Army Medical Center (DDEAMC)\n\nPROCEDURE PERFORMED: Direct Anterior Total Hip Arthroplasty (DA-THA)\nANESTHESIA: Spinal / General endotracheal\nESTIMATED BLOOD LOSS: ${ebl}\n\nIMPLANTS PLACED (Zimmer Biomet):\n${implants} (${stem})\n\nSURGICAL APPROACH & INCISION:\n${inc} incision. Dissection carried through tensor fascia lata intermuscular interval protecting LFCN branches. Exposure maintained with anterior retractor suite.\n\nWOUND CLOSURE:\n${getClosureText()}\n\nSPECIAL PRECAUTIONS & POSTOPERATIVE PLAN:\n${instructions}\n1. Weight bearing as tolerated.\n2. DVT chemoprophylaxis per protocol.\n\nADDITIONAL OPERATIVE DETAILS:\n${rawDictation || 'Routine course without complication.'}`;
+      } else if (type === "op_primary_tka") {
+        const constr = document.getElementById("opTkaConst") ? document.getElementById("opTkaConst").value : "Persona CR";
+        const pat = document.getElementById("opTkaPatella") ? document.getElementById("opTkaPatella").value : "Resurfaced";
+        const implants = document.getElementById("opImplants") ? document.getElementById("opImplants").value : "Implants";
+        const ebl = document.getElementById("opEbl") ? document.getElementById("opEbl").value : "50 cc";
+        note = `OPERATIVE REPORT - PRIMARY TOTAL KNEE ARTHROPLASTY\nPATIENT: ${ptName} | DEMOGRAPHICS: ${ageGender}\nDATE OF SURGERY: ${new Date().toLocaleDateString()}\nSURGEON: Dr. Spencer Schulte, MD\nHOSPITAL: DDEAMC\n\nPROCEDURE: Primary Tricompartmental Total Knee Arthroplasty\nANESTHESIA: Spinal / General with adductor canal block\nESTIMATED BLOOD LOSS: ${ebl}\n\nIMPLANTS PLACED (Zimmer Biomet Persona):\n${implants}\nConstraint: ${constr} | Patella: ${pat}\n\nTECHNIQUE & BALANCE:\nMedial parapatellar arthrotomy. Measured resection technique. Femoral and tibial cuts verified perpendicular to mechanical axis. Extension and flexion gaps balanced symmetrically. Patellar tracking confirmed central without lateral tilt (no-thumb technique).\n\nWOUND CLOSURE:\n${getClosureText()}\n\nPRECAUTIONS & PLAN:\n${instructions}\n1. Weight bearing as tolerated. Early active knee extension/flexion.\n\nNOTES:\n${rawDictation || 'Routine primary course.'}`;
+      } else if (type === "op_hip_hemi") {
+        const app = document.getElementById("opHemiApp") ? document.getElementById("opHemiApp").value : "Direct Anterior";
+        const stem = document.getElementById("opHemiStem") ? document.getElementById("opHemiStem").value : "Z1 Collared";
+        const implants = document.getElementById("opImplants") ? document.getElementById("opImplants").value : "Implants";
+        const ebl = document.getElementById("opEbl") ? document.getElementById("opEbl").value : "100 cc";
+        note = `OPERATIVE REPORT - BIPOLAR HIP HEMIARTHROPLASTY\nPATIENT: ${ptName} | DEMOGRAPHICS: ${ageGender}\nDATE OF SURGERY: ${new Date().toLocaleDateString()}\nSURGEON: Dr. Spencer Schulte, MD\nHOSPITAL: DDEAMC\n\nPROCEDURE: Bipolar Hemiarthroplasty of the Hip\nANESTHESIA: Spinal / General\nESTIMATED BLOOD LOSS: ${ebl}\n\nIMPLANTS PLACED (Zimmer Biomet):\n${implants} (${stem})\n\nSURGICAL APPROACH:\n${app} approach. Femoral neck osteotomy completed at anatomic level. Calcar prepared. Acetabulum inspected and cleared of loose debris with native articular cartilage intact.\n\nWOUND CLOSURE:\n${getClosureText()}\n\nPOSTOPERATIVE PLAN:\n${instructions}\n1. Weight bearing as tolerated.\n\nNOTES:\n${rawDictation || 'Routine course without complication.'}`;
+      } else if (type === "op_stage1_pji") {
+        const spacer = document.getElementById("opStage1Spacer") ? document.getElementById("opStage1Spacer").value : "Articulating Spacer";
+        const abx = document.getElementById("opStage1Abx") ? document.getElementById("opStage1Abx").value : "Vancomycin / Tobramycin";
+        const implants = document.getElementById("opImplants") ? document.getElementById("opImplants").value : "Implants";
+        const ebl = document.getElementById("opEbl") ? document.getElementById("opEbl").value : "250 cc";
+        note = `OPERATIVE REPORT - STAGE 1 REVISION ARTHROPLASTY (PJI ERADICATION)\nPATIENT: ${ptName} | DEMOGRAPHICS: ${ageGender}\nDATE OF SURGERY: ${new Date().toLocaleDateString()}\nSURGEON: Dr. Spencer Schulte, MD\nHOSPITAL: DDEAMC\n\nPROCEDURE: Complete Implant Explantation, Radical Debridement, and Placement of High-Dose Antibiotic Cement Spacer\nESTIMATED BLOOD LOSS: ${ebl}\n\nHARDWARE EXPLANTATION & DEBRIDEMENT:\n${implants}. All devitalized fibrous membrane and foreign debris excised. Extensive pulse lavage irrigation.\n\nANTIBIOTIC SPACER CONSTRUCT:\n${spacer}\nAntibiotic Impregnation: ${abx}.\n\nWOUND CLOSURE:\n${getClosureText()}\n\nPOSTOPERATIVE PLAN:\n${instructions}\n1. Protected weight bearing.\n2. Infectious disease co-management for targeted parenteral antibiotic therapy.\n\nNOTES:\n${rawDictation || 'Radical debridement completed without complication.'}`;
+      } else if (type === "op_rev_tka") {
+        const ioVanc = document.getElementById("opIoVanc") ? document.getElementById("opIoVanc").value : "IO Vanc";
+        const explant = document.getElementById("opExplant") ? document.getElementById("opExplant").value : "Explant Liner";
+        const implants = document.getElementById("opImplants") ? document.getElementById("opImplants").value : "New Liner";
+        const ebl = document.getElementById("opEbl") ? document.getElementById("opEbl").value : "75 cc";
+        note = `OPERATIVE REPORT - REVISION TOTAL KNEE ARTHROPLASTY\nPATIENT: ${ptName} | DEMOGRAPHICS: ${ageGender}\nDATE OF SURGERY: ${new Date().toLocaleDateString()}\nSURGEON: Dr. Spencer Schulte, MD\nHOSPITAL: DDEAMC\n\nPROCEDURE: Revision Total Knee Arthroplasty - Isolated Liner Exchange\nANESTHESIA: Spinal / General\nESTIMATED BLOOD LOSS: ${ebl}\n\nPROPHYLAXIS:\n${ioVanc}\n\nEXPLANT DETAILS:\n${explant}\n\nNEW IMPLANTS PLACED (Zimmer Biomet Persona):\n${implants}\n\nSURGICAL COURSE:\nMedial parapatellar arthrotomy. Atraumatic explantation of worn polyethylene component. Stability verified through full arc of motion.\n\nWOUND CLOSURE:\n${getClosureText()}\n\nSPECIAL PRECAUTIONS:\n${instructions}\n\nNOTES:\n${rawDictation || 'Routine revision course.'}`;
+      } else if (type === "op_lat_plateau") {
+        const sys = document.getElementById("opPlateauSys") ? document.getElementById("opPlateauSys").value : "Synthes";
+        const graft = document.getElementById("opPlateauGraft") ? document.getElementById("opPlateauGraft").value : "Subchondral raft";
+        const implants = document.getElementById("opImplants") ? document.getElementById("opImplants").value : "Plates";
+        const ebl = document.getElementById("opEbl") ? document.getElementById("opEbl").value : "100 cc";
+        note = `OPERATIVE REPORT - ORIF LATERAL TIBIAL PLATEAU FRACTURE\nPATIENT: ${ptName} | DEMOGRAPHICS: ${ageGender}\nDATE OF SURGERY: ${new Date().toLocaleDateString()}\nSURGEON: Dr. Spencer Schulte, MD\nHOSPITAL: DDEAMC\n\nPROCEDURE: Open Reduction Internal Fixation Lateral Tibial Plateau Fracture\nESTIMATED BLOOD LOSS: ${ebl}\n\nIMPLANTS PLACED (${sys}):\n${implants}\n\nTECHNIQUE & REDUCTION:\nAnterolateral approach. Submeniscal arthrotomy performed to visualize joint surface. Depressed articular fragments elevated under direct visualization and stabilized with ${graft}.\n\nWOUND CLOSURE:\n${getClosureText()}\n\nPRECAUTIONS & PLAN:\n${instructions}\n1. Strict non-weight bearing (NWB) x 6 weeks. Hinged knee brace.\n\nNOTES:\n${rawDictation || 'Anatomic articular reduction achieved.'}`;
+      } else if (type === "op_med_plateau") {
+        const app = document.getElementById("opMedApproach") ? document.getElementById("opMedApproach").value : "Posteromedial";
+        const red = document.getElementById("opMedRed") ? document.getElementById("opMedRed").value : "Anatomic";
+        const implants = document.getElementById("opImplants") ? document.getElementById("opImplants").value : "Implants";
+        const ebl = document.getElementById("opEbl") ? document.getElementById("opEbl").value : "75 cc";
+        note = `OPERATIVE REPORT - ORIF MEDIAL TIBIAL PLATEAU FRACTURE\nPATIENT: ${ptName} | DEMOGRAPHICS: ${ageGender}\nDATE OF SURGERY: ${new Date().toLocaleDateString()}\nSURGEON: Dr. Spencer Schulte, MD\nHOSPITAL: DDEAMC\n\nPROCEDURE: Open Reduction Internal Fixation Medial Tibial Plateau Fracture\nESTIMATED BLOOD LOSS: ${ebl}\n\nIMPLANTS PLACED (Synthes / Stryker):\n${implants}\n\nAPPROACH & FIXATION:\n${app}.\n${red}. Buttress plate positioned to resist shear forces along the posteromedial cortex.\n\nWOUND CLOSURE:\n${getClosureText()}\n\nPRECAUTIONS:\n${instructions}\n1. Non-weight bearing x 6 weeks.\n\nNOTES:\n${rawDictation || 'Stable buttress fixation achieved.'}`;
+      } else if (type === "op_bicondylar_plateau") {
+        const con = document.getElementById("opBiconConstruct") ? document.getElementById("opBiconConstruct").value : "Dual Plating";
+        const red = document.getElementById("opBiconRed") ? document.getElementById("opBiconRed").value : "Direct visualization";
+        const implants = document.getElementById("opImplants") ? document.getElementById("opImplants").value : "Implants";
+        const ebl = document.getElementById("opEbl") ? document.getElementById("opEbl").value : "150 cc";
+        note = `OPERATIVE REPORT - ORIF BICONDYLAR TIBIAL PLATEAU FRACTURE\nPATIENT: ${ptName} | DEMOGRAPHICS: ${ageGender}\nDATE OF SURGERY: ${new Date().toLocaleDateString()}\nSURGEON: Dr. Spencer Schulte, MD\nHOSPITAL: DDEAMC\n\nPROCEDURE: Open Reduction Internal Fixation Bicondylar Tibial Plateau Fracture (Dual Plating)\nESTIMATED BLOOD LOSS: ${ebl}\n\nIMPLANTS PLACED (Synthes / Stryker):\n${implants}\nConstruct: ${con}\n\nTECHNIQUE:\nDual incision technique. Posteromedial column reduced and stabilized first to re-establish the coronal plane landmark, followed by anterolateral articular elevation and fixed-angle raft plating. ${red}.\n\nWOUND CLOSURE:\n${getClosureText()}\n\nPRECAUTIONS:\n${instructions}\n1. Non-weight bearing x 10-12 weeks.\n\nNOTES:\n${rawDictation || 'Rigid dual-column stabilization achieved.'}`;
+      } else if (type === "op_clavicle") {
+        const pos = document.getElementById("opClavPos") ? document.getElementById("opClavPos").value : "Superior";
+        const nrv = document.getElementById("opClavNerve") ? document.getElementById("opClavNerve").value : "Protected";
+        const implants = document.getElementById("opImplants") ? document.getElementById("opImplants").value : "Implants";
+        const ebl = document.getElementById("opEbl") ? document.getElementById("opEbl").value : "25 cc";
+        note = `OPERATIVE REPORT - ORIF CLAVICLE SHAFT FRACTURE\nPATIENT: ${ptName} | DEMOGRAPHICS: ${ageGender}\nDATE OF SURGERY: ${new Date().toLocaleDateString()}\nSURGEON: Dr. Spencer Schulte, MD\nHOSPITAL: DDEAMC\n\nPROCEDURE: Open Reduction Internal Fixation Clavicle Shaft Fracture\nESTIMATED BLOOD LOSS: ${ebl}\n\nIMPLANTS PLACED (Synthes / Stryker):\n${implants} (${pos})\n\nDISSECTION & REDUCTION:\nTransverse incision. ${nrv}. Fracture fragments debrided, reduced with pointed reduction clamps, and compressed rigidly with precontoured locking plate construct.\n\nWOUND CLOSURE:\n${getClosureText()}\n\nPRECAUTIONS:\n${instructions}\n1. Sling for comfort. Non-weight bearing on operative upper extremity.\n\nNOTES:\n${rawDictation || 'Anatomic clavicular alignment achieved.'}`;
+      } else if (type === "op_femur_fx") {
+        const con = document.getElementById("opFemurConst") ? document.getElementById("opFemurConst").value : "Plate + Cables";
+        const stm = document.getElementById("opFemurStem") ? document.getElementById("opFemurStem").value : "Stable";
+        const implants = document.getElementById("opImplants") ? document.getElementById("opImplants").value : "Implants";
+        const ebl = document.getElementById("opEbl") ? document.getElementById("opEbl").value : "150 cc";
+        note = `OPERATIVE REPORT - ORIF PERIPROSTHETIC FEMUR FRACTURE\nPATIENT: ${ptName} | DEMOGRAPHICS: ${ageGender}\nDATE OF SURGERY: ${new Date().toLocaleDateString()}\nSURGEON: Dr. Spencer Schulte, MD\nHOSPITAL: DDEAMC\n\nPROCEDURE: Open Reduction Internal Fixation Periprosthetic Femur Fracture\nESTIMATED BLOOD LOSS: ${ebl}\n\nIMPLANTS PLACED (Stryker / Synthes):\n${implants}\nConstruct: ${con}\n\nSURGICAL TECHNIQUE:\nDirect lateral approach to the femur. Fracture exposed. ${stm}. Rigid fixation obtained bridging the stem tip with broad periprosthetic locking plate and proximal cerclage cables.\n\nWOUND CLOSURE:\n${getClosureText()}\n\nPRECAUTIONS:\n${instructions}\n1. Non-weight bearing x 6-8 weeks.\n\nNOTES:\n${rawDictation || 'Stable periprosthetic stabilization achieved.'}`;
+      }
+
+      document.getElementById("noteOutput").value = note;
+    }
+
+    // --- Clipboard & Native Share Export ---
+    function copyNote() {
+      const note = document.getElementById("noteOutput").value;
+      navigator.clipboard.writeText(note).then(() => {
+        const btn = document.getElementById("copyBtn");
+        btn.innerText = "Copied ✓";
+        setTimeout(() => { btn.innerText = "Copy Note"; }, 1500);
+      });
+    }
+
+    function shareToKeep() {
+      const note = document.getElementById("noteOutput").value;
+      const ptName = document.getElementById("ptName").value || "Patient";
+      if (navigator.share) {
+        navigator.share({
+          title: `Ortho Note - ${ptName}`,
+          text: note
+        }).catch(() => {});
+      } else {
+        copyNote();
+        alert("Note copied to clipboard.");
+      }
+    }
+  </script>
+</body>
+</html>
