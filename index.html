@@ -8,8 +8,6 @@
   <link rel="manifest" href='data:application/manifest+json,{"name":"OrthoFlow Clinical Dashboard","short_name":"OrthoFlow","start_url":".","display":"standalone","background_color":"#0b0f19","theme_color":"#0b0f19"}'>
   
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Client-Side OCR Engine -->
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <style>
     body { background-color: #0b0f19; color: #e2e8f0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; touch-action: manipulation; }
     .no-scrollbar::-webkit-scrollbar { display: none; }
@@ -30,7 +28,6 @@
       <h1 class="text-xl font-bold tracking-tight text-white mb-1">OrthoFlow</h1>
       <p class="text-xs text-slate-400 mb-6">Adult Reconstruction & Clinical Scribe</p>
 
-      <!-- Pin Indicator Dots -->
       <div class="flex gap-3 mb-8">
         <div id="dot0" class="w-4 h-4 rounded-full border-2 border-slate-600 bg-slate-900 transition-colors"></div>
         <div id="dot1" class="w-4 h-4 rounded-full border-2 border-slate-600 bg-slate-900 transition-colors"></div>
@@ -40,7 +37,6 @@
         <div id="dot5" class="w-4 h-4 rounded-full border-2 border-slate-600 bg-slate-900 transition-colors"></div>
       </div>
 
-      <!-- Numeric Keypad -->
       <div class="grid grid-cols-3 gap-3 w-full max-w-[280px]">
         <button type="button" class="key-btn h-14 rounded-2xl bg-slate-900 border border-slate-800 text-xl font-bold text-white active:bg-blue-600/30 active:border-blue-500" data-val="1">1</button>
         <button type="button" class="key-btn h-14 rounded-2xl bg-slate-900 border border-slate-800 text-xl font-bold text-white active:bg-blue-600/30 active:border-blue-500" data-val="2">2</button>
@@ -70,7 +66,7 @@
     </div>
     <div class="flex items-center gap-2">
       <button onclick="toggleScreeningModal()" class="px-2.5 py-1 rounded-lg bg-emerald-600/20 border border-emerald-500/40 text-xs text-emerald-300 font-medium active:bg-emerald-600/30">
-        Run List (<span id="clinicCount">0</span>)
+        1-Liners (<span id="clinicCount">0</span>)
       </button>
       <button onclick="lockApp()" class="px-2.5 py-1 rounded-lg bg-slate-800 border border-slate-700 text-xs text-slate-300 font-medium active:bg-slate-700">Lock</button>
     </div>
@@ -79,10 +75,10 @@
   <!-- ================= MAIN CONTAINER ================= -->
   <main class="flex-1 max-w-2xl mx-auto w-full p-4 flex flex-col gap-4 pb-12">
 
-    <!-- Clinic Date Selector & Queue Header -->
-    <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-3.5 flex flex-col gap-2">
+    <!-- Clinic Date Selector & Batch Schedule Uploader -->
+    <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-3.5 flex flex-col gap-3">
       <div class="flex items-center justify-between">
-        <label class="text-[10px] text-slate-400 font-semibold tracking-wider uppercase">Active Clinic Date</label>
+        <label class="text-[10px] text-slate-400 font-semibold tracking-wider uppercase">Clinic Date & Schedule Roster</label>
         <span class="text-[10px] text-blue-400 font-mono" id="activeDateDisplay">Loaded</span>
       </div>
       <div class="flex gap-2">
@@ -91,44 +87,58 @@
           View 1-Liners
         </button>
       </div>
-    </div>
 
-    <!-- OCR Camera & Run-List Scanner -->
-    <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-3.5">
-      <div class="flex items-center justify-between">
+      <!-- Batch Schedule Photo Uploader -->
+      <div class="pt-2.5 border-t border-slate-800 flex items-center justify-between">
         <div>
           <span class="text-xs font-bold text-white flex items-center gap-1.5">
             <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
             </svg>
-            Scan Schedule / Face Sheet
+            Import Clinic Schedule Photos
           </span>
-          <p class="text-[10px] text-slate-400">On-device OCR parser & Auto-Router</p>
+          <p class="text-[10px] text-slate-400">Select 1+ schedule photos to extract all patients</p>
         </div>
         <label class="cursor-pointer px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold active:bg-blue-700 transition-colors">
-          Scan Photo
-          <input type="file" id="ocrInput" accept="image/*" capture="environment" class="hidden" onchange="processImage(this)">
+          Upload Photos
+          <input type="file" id="ocrInput" accept="image/*" multiple class="hidden" onchange="processSchedulePhotos(this)">
         </label>
       </div>
-      <div id="ocrProgressBox" class="hidden mt-3 pt-3 border-t border-slate-800">
+
+      <!-- Multi-Photo Progress Bar -->
+      <div id="ocrProgressBox" class="hidden pt-2 border-t border-slate-800">
         <div class="flex justify-between text-[11px] mb-1">
-          <span id="ocrStatusText" class="text-blue-400 font-medium">Initializing camera engine...</span>
+          <span id="ocrStatusText" class="text-blue-400 font-medium">Processing schedule photos...</span>
           <span id="ocrPercent" class="text-slate-400 font-mono">0%</span>
         </div>
         <div class="w-full bg-slate-950 rounded-full h-1.5 overflow-hidden">
           <div id="ocrProgressBar" class="bg-blue-500 h-1.5 rounded-full transition-all duration-150" style="width: 0%"></div>
         </div>
       </div>
+
+      <!-- Interactive Encounter Roster Cards for Selected Date -->
+      <div id="encounterRosterSection" class="pt-2 border-t border-slate-800">
+        <div class="flex justify-between items-center mb-2">
+          <span class="text-[10px] font-semibold tracking-wider uppercase text-slate-400">Scheduled Encounters (<span id="rosterBadgeCount">0</span>)</span>
+          <button onclick="createBlankEncounter()" class="text-[11px] text-blue-400 font-medium">+ Blank Encounter</button>
+        </div>
+        <div id="encounterCardsList" class="flex flex-col gap-2 max-h-60 overflow-y-auto no-scrollbar">
+          <!-- Populated dynamically per clinic date -->
+        </div>
+      </div>
     </div>
 
-    <!-- Patient Header & Post-Op Matchmaker Banner -->
+    <!-- Active Patient Encounter Workspace -->
     <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-sm">
       <div class="flex justify-between items-center mb-3">
-        <span class="text-[11px] font-semibold tracking-wider uppercase text-blue-400">Patient Encounter</span>
+        <div class="flex items-center gap-2">
+          <span class="text-[11px] font-semibold tracking-wider uppercase text-blue-400">Active Encounter</span>
+          <span id="activeEncounterTag" class="hidden text-[10px] bg-blue-600/20 text-blue-300 border border-blue-500/40 px-2 py-0.5 rounded-full font-medium">Synced</span>
+        </div>
         <div class="flex gap-2">
-          <button onclick="savePatientToClinicList()" class="px-2.5 py-1 rounded-lg bg-emerald-600/20 border border-emerald-500/40 text-emerald-400 text-xs font-medium active:bg-emerald-600/30">
-            + Queue Pt
+          <button onclick="saveActiveEncounter()" class="px-2.5 py-1 rounded-lg bg-emerald-600/20 border border-emerald-500/40 text-emerald-400 text-xs font-medium active:bg-emerald-600/30">
+            Save to Date
           </button>
           <button onclick="lookupPatient()" id="matchBtn" class="px-2.5 py-1 rounded-lg bg-blue-600/20 border border-blue-500/40 text-blue-400 text-xs font-medium active:bg-blue-600/30">
             Match Registry
@@ -139,12 +149,19 @@
       <div class="grid grid-cols-2 gap-2 mb-2">
         <div>
           <label class="text-[10px] text-slate-400 font-medium block mb-1">Patient Name</label>
-          <input id="ptName" onblur="lookupPatient()" type="text" placeholder="Last, First" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500">
+          <input id="ptName" oninput="autoSaveCurrentEncounter()" onblur="lookupPatient()" type="text" placeholder="Last, First" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500">
         </div>
         <div>
           <label class="text-[10px] text-slate-400 font-medium block mb-1">Age / Gender</label>
-          <input id="ptAgeGender" type="text" placeholder="e.g. 64M" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500">
+          <input id="ptAgeGender" oninput="autoSaveCurrentEncounter()" type="text" placeholder="e.g. 64M" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500">
         </div>
+      </div>
+
+      <!-- Encounter Stage / Status Toggle -->
+      <div class="grid grid-cols-3 gap-1.5 mt-2">
+        <button type="button" onclick="setEncounterStage('Pre-Visit')" id="stagePre" class="py-1.5 rounded-lg text-[11px] font-medium border border-blue-500 bg-blue-600/20 text-white">Pre-Visit Prep</button>
+        <button type="button" onclick="setEncounterStage('In-Clinic')" id="stageIn" class="py-1.5 rounded-lg text-[11px] font-medium border border-slate-800 bg-slate-950 text-slate-400">In-Clinic</button>
+        <button type="button" onclick="setEncounterStage('Completed')" id="stageDone" class="py-1.5 rounded-lg text-[11px] font-medium border border-slate-800 bg-slate-950 text-slate-400">Completed ✓</button>
       </div>
 
       <!-- Matchmaker Status Alert -->
@@ -162,7 +179,7 @@
           </button>
         </div>
       </div>
-      <select id="templateSelect" onchange="renderTemplateFields()" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white font-medium focus:outline-none focus:border-blue-500">
+      <select id="templateSelect" onchange="onModuleChanged()" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white font-medium focus:outline-none focus:border-blue-500">
         <optgroup label="Post-Operative Surveillance">
           <option value="postop">Post-Operative Follow-Up (2W / 6W / 12W / 1Y)</option>
         </optgroup>
@@ -220,24 +237,23 @@
       </div>
     </div>
 
-    <!-- Special Precautions Input -->
+    <!-- Special Precautions / 1-Liner Summary Input -->
     <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4">
       <div class="flex justify-between items-center mb-1.5">
-        <label class="text-[10px] text-slate-400 font-semibold tracking-wider uppercase">Special Instructions / Precautions</label>
-        <span class="text-[10px] text-amber-400 font-medium">Syncs to Registry & 1-Liner</span>
+        <label class="text-[10px] text-slate-400 font-semibold tracking-wider uppercase">1-Liner Plan / Precautions</label>
+        <span class="text-[10px] text-amber-400 font-medium">Populates 1-Liner & Registry</span>
       </div>
-      <input id="postOpInstructions" type="text" placeholder="e.g. Discuss DA-THA, KL-4 OA, NWB 6 wks, Prevena 7d battery" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500">
+      <input id="postOpInstructions" oninput="autoSaveCurrentEncounter(); assembleNote();" type="text" placeholder="e.g. Discuss DA-THA, KL-4 OA, NWB 6 wks, Prevena 7d battery" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500">
     </div>
 
     <!-- Raw Notes, Dictation & Gemini AI Parse Engine -->
     <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4">
       <div class="flex justify-between items-center mb-2">
-        <label class="text-[10px] text-slate-400 font-semibold tracking-wider uppercase">Dictation & Raw Notes</label>
+        <label class="text-[10px] text-slate-400 font-semibold tracking-wider uppercase">Dictation & Clinical Notes</label>
         <span class="text-[10px] text-purple-400 font-medium">Gemini 2.5 Flash Connected</span>
       </div>
-      <textarea id="dictationBox" rows="3" placeholder="Dictate clinical specifics, exam nuances, or implant serials using Gboard mic..." class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-blue-500 no-scrollbar"></textarea>
+      <textarea id="dictationBox" oninput="autoSaveCurrentEncounter(); assembleNote();" rows="3" placeholder="Dictate clinical specifics, exam nuances, or implant serials using Gboard mic..." class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-blue-500 no-scrollbar"></textarea>
       
-      <!-- AI Action Bar -->
       <div class="flex justify-between items-center mt-2.5 pt-2 border-t border-slate-800/80">
         <span class="text-[10px] text-slate-400">Speak naturally, then distribute:</span>
         <button type="button" onclick="parseDictationWithAI()" id="aiParseBtn" class="px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-xs font-semibold text-white active:bg-purple-700 flex items-center gap-1.5 transition-colors">
@@ -257,7 +273,6 @@
       </div>
       <textarea id="noteOutput" rows="11" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-slate-200 font-mono leading-relaxed focus:outline-none no-scrollbar"></textarea>
 
-      <!-- Action Buttons -->
       <div class="grid grid-cols-3 gap-2 mt-2">
         <button onclick="copyNote()" id="copyBtn" class="py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-xs font-semibold text-white active:bg-slate-700">
           Copy Note
@@ -298,7 +313,7 @@
         <div>
           <div class="flex justify-between items-center mb-1">
             <label class="text-[10px] text-slate-400 font-medium">Operative Report Text Skeleton</label>
-            <span class="text-[9px] text-blue-400">Insert tags: {PATIENT_NAME}, {DATE}, {IMPLANTS}, {CLOSURE}, {DICTATION}</span>
+            <span class="text-[9px] text-blue-400">Tags: {PATIENT_NAME}, {DATE}, {IMPLANTS}, {CLOSURE}, {DICTATION}</span>
           </div>
           <textarea id="newTemplateBody" rows="10" placeholder="OPERATIVE REPORT
 PATIENT: {PATIENT_NAME} | DEMOGRAPHICS: {AGE_GENDER}
@@ -312,16 +327,13 @@ ESTIMATED BLOOD LOSS: {EBL}
 IMPLANTS PLACED:
 {IMPLANTS}
 
-SURGICAL TECHNIQUE:
-[Detail surgical approach and fixation steps here...]
-
 WOUND CLOSURE:
 {CLOSURE}
 
 PRECAUTIONS & PLAN:
 {PRECAUTIONS}
 
-NOTES & INTRAOPERATIVE FINDINGS:
+NOTES:
 {DICTATION}" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-slate-200 font-mono leading-relaxed focus:outline-none no-scrollbar"></textarea>
         </div>
       </div>
@@ -337,12 +349,12 @@ NOTES & INTRAOPERATIVE FINDINGS:
     </div>
   </div>
 
-  <!-- ================= SCREENING LIST MODAL ================= -->
+  <!-- ================= SCREENING 1-LINER MODAL ================= -->
   <div id="screeningModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex flex-col justify-end p-0 sm:p-4">
     <div class="bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-2xl max-w-2xl w-full mx-auto p-5 flex flex-col max-h-[85vh]">
       <div class="flex justify-between items-center mb-3">
         <div>
-          <h2 class="text-sm font-bold text-white uppercase tracking-wider">Clinic Screening Roster</h2>
+          <h2 class="text-sm font-bold text-white uppercase tracking-wider">Clinic 1-Liner Screening List</h2>
           <p class="text-[11px] text-slate-400" id="modalClinicDateHeader">Date: Select Date</p>
         </div>
         <button onclick="toggleScreeningModal()" class="w-8 h-8 rounded-full bg-slate-800 text-slate-300 flex items-center justify-center font-bold">✕</button>
@@ -360,7 +372,7 @@ NOTES & INTRAOPERATIVE FINDINGS:
           Export Keep
         </button>
         <button onclick="clearCurrentClinicQueue()" class="py-2.5 rounded-xl bg-red-900/30 border border-red-700/50 text-xs font-semibold text-red-400 active:bg-red-900/50">
-          Clear Roster
+          Clear Date
         </button>
       </div>
     </div>
@@ -375,13 +387,13 @@ NOTES & INTRAOPERATIVE FINDINGS:
     let matchedCaseData = null;
     let inactivityTimer = null;
     let currentClinicDate = new Date().toISOString().split('T')[0];
+    let activeEncounterId = null;
+    let activeEncounterStage = "Pre-Visit";
 
     // --- Inactivity Auto-Lock (15 Minutes) ---
     function resetInactivityTimer() {
       clearTimeout(inactivityTimer);
-      inactivityTimer = setTimeout(() => {
-        lockApp();
-      }, 15 * 60 * 1000);
+      inactivityTimer = setTimeout(() => { lockApp(); }, 15 * 60 * 1000);
     }
     ['touchstart', 'mousedown', 'keydown', 'scroll'].forEach(evt => {
       window.addEventListener(evt, resetInactivityTimer, { passive: true });
@@ -395,13 +407,11 @@ NOTES & INTRAOPERATIVE FINDINGS:
           handleDigit(btn.getAttribute("data-val"));
         });
       });
-
       document.getElementById("clearBtn").addEventListener("click", (e) => {
         e.preventDefault();
         enteredPin = "";
         updateDots();
       });
-
       document.getElementById("deleteBtn").addEventListener("click", (e) => {
         e.preventDefault();
         enteredPin = enteredPin.slice(0, -1);
@@ -413,9 +423,7 @@ NOTES & INTRAOPERATIVE FINDINGS:
       if (enteredPin.length < 6) {
         enteredPin += digit;
         updateDots();
-        if (enteredPin.length === 6) {
-          setTimeout(verifyPin, 50);
-        }
+        if (enteredPin.length === 6) setTimeout(verifyPin, 50);
       }
     }
 
@@ -423,11 +431,9 @@ NOTES & INTRAOPERATIVE FINDINGS:
       for (let i = 0; i < 6; i++) {
         const dot = document.getElementById("dot" + i);
         if (dot) {
-          if (i < enteredPin.length) {
-            dot.className = "w-4 h-4 rounded-full border-2 border-blue-500 bg-blue-500 transition-colors";
-          } else {
-            dot.className = "w-4 h-4 rounded-full border-2 border-slate-600 bg-slate-900 transition-colors";
-          }
+          dot.className = i < enteredPin.length
+            ? "w-4 h-4 rounded-full border-2 border-blue-500 bg-blue-500 transition-colors"
+            : "w-4 h-4 rounded-full border-2 border-slate-600 bg-slate-900 transition-colors";
         }
       }
     }
@@ -458,7 +464,7 @@ NOTES & INTRAOPERATIVE FINDINGS:
       clearTimeout(inactivityTimer);
     }
 
-    // --- Custom Template Manager (Local Storage) ---
+    // --- Custom Template Manager ---
     function getCustomTemplates() {
       const stored = localStorage.getItem("orthoflow_custom_templates");
       return stored ? JSON.parse(stored) : [];
@@ -467,8 +473,7 @@ NOTES & INTRAOPERATIVE FINDINGS:
     function loadCustomTemplatesIntoDropdown() {
       const group = document.getElementById("customTemplateGroup");
       group.innerHTML = "";
-      const list = getCustomTemplates();
-      list.forEach((t, idx) => {
+      getCustomTemplates().forEach((t, idx) => {
         const opt = document.createElement("option");
         opt.value = `custom_${idx}`;
         opt.innerText = t.title;
@@ -477,8 +482,7 @@ NOTES & INTRAOPERATIVE FINDINGS:
     }
 
     function toggleTemplateStudio() {
-      const modal = document.getElementById("templateStudioModal");
-      modal.classList.toggle("hidden");
+      document.getElementById("templateStudioModal").classList.toggle("hidden");
     }
 
     function saveCustomTemplate() {
@@ -499,62 +503,194 @@ NOTES & INTRAOPERATIVE FINDINGS:
       document.getElementById("templateSelect").value = `custom_${templates.length - 1}`;
       toggleTemplateStudio();
       renderTemplateFields();
-      alert(`Saved "${title}" to your operative template suite.`);
     }
 
-    // --- Multi-Date Screening Queue & Generator ---
+    // --- Date-Segmented Encounter State Management ---
     function onClinicDateChange() {
       currentClinicDate = document.getElementById("clinicDatePicker").value;
-      updateClinicQueueUI();
+      activeEncounterId = null;
+      document.getElementById("activeEncounterTag").classList.add("hidden");
+      renderClinicRosterUI();
     }
 
-    function getClinicQueue(date) {
-      const stored = localStorage.getItem(`orthoflow_queue_${date}`);
+    function getClinicEncounters(date) {
+      const stored = localStorage.getItem(`orthoflow_encounters_${date}`);
       return stored ? JSON.parse(stored) : [];
     }
 
-    function savePatientToClinicList() {
-      const ptName = document.getElementById("ptName").value.trim();
-      const ageGender = document.getElementById("ptAgeGender").value.trim() || "Adult";
-      const tmplSelect = document.getElementById("templateSelect");
-      const moduleName = tmplSelect.options[tmplSelect.selectedIndex].text.split("(")[0].trim();
-      const instructions = document.getElementById("postOpInstructions").value.trim() || "Routine surveillance";
-
-      if (!ptName) {
-        alert("Enter patient name before adding to clinic queue.");
-        return;
-      }
-
-      const queue = getClinicQueue(currentClinicDate);
-      const newPt = {
-        name: ptName,
-        ageGender: ageGender,
-        module: moduleName,
-        planSummary: instructions,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      };
-
-      queue.push(newPt);
-      localStorage.setItem(`orthoflow_queue_${currentClinicDate}`, JSON.stringify(queue));
-      updateClinicQueueUI();
-      alert(`Queued ${ptName} to ${currentClinicDate}`);
+    function saveClinicEncounters(date, encounters) {
+      localStorage.setItem(`orthoflow_encounters_${date}`, JSON.stringify(encounters));
+      renderClinicRosterUI();
     }
 
-    function updateClinicQueueUI() {
-      const queue = getClinicQueue(currentClinicDate);
-      document.getElementById("clinicCount").innerText = queue.length;
-      document.getElementById("activeDateDisplay").innerText = currentClinicDate;
-      document.getElementById("modalClinicDateHeader").innerText = `Date: ${currentClinicDate} (${queue.length} Patients)`;
+    function createBlankEncounter() {
+      activeEncounterId = "enc_" + Date.now();
+      activeEncounterStage = "Pre-Visit";
+      matchedCaseData = null;
+      document.getElementById("ptName").value = "";
+      document.getElementById("ptAgeGender").value = "";
+      document.getElementById("postOpInstructions").value = "";
+      document.getElementById("dictationBox").value = "";
+      document.getElementById("matchAlert").classList.add("hidden");
+      document.getElementById("activeEncounterTag").classList.remove("hidden");
+      updateStageButtons();
+      renderTemplateFields();
+    }
 
+    function setEncounterStage(stage) {
+      activeEncounterStage = stage;
+      updateStageButtons();
+      autoSaveCurrentEncounter();
+    }
+
+    function updateStageButtons() {
+      const map = { 'Pre-Visit': 'stagePre', 'In-Clinic': 'stageIn', 'Completed': 'stageDone' };
+      Object.entries(map).forEach(([key, id]) => {
+        const btn = document.getElementById(id);
+        if (btn) {
+          btn.className = key === activeEncounterStage
+            ? "py-1.5 rounded-lg text-[11px] font-medium border border-blue-500 bg-blue-600/20 text-white"
+            : "py-1.5 rounded-lg text-[11px] font-medium border border-slate-800 bg-slate-950 text-slate-400";
+        }
+      });
+    }
+
+    function saveActiveEncounter() {
+      const ptName = document.getElementById("ptName").value.trim();
+      if (!ptName) {
+        alert("Enter a patient name first.");
+        return;
+      }
+      if (!activeEncounterId) {
+        activeEncounterId = "enc_" + Date.now();
+      }
+      autoSaveCurrentEncounter(true);
+      document.getElementById("activeEncounterTag").classList.remove("hidden");
+    }
+
+    function autoSaveCurrentEncounter(forceCreate = false) {
+      const ptName = document.getElementById("ptName").value.trim();
+      if (!ptName) return;
+      if (!activeEncounterId && !forceCreate) return;
+
+      const encounters = getClinicEncounters(currentClinicDate);
+      const tmplSelect = document.getElementById("templateSelect");
+      const moduleVal = tmplSelect.value;
+      const moduleLabel = tmplSelect.options[tmplSelect.selectedIndex].text.split("(")[0].trim();
+
+      const record = {
+        id: activeEncounterId,
+        name: ptName,
+        ageGender: document.getElementById("ptAgeGender").value.trim() || "Adult",
+        moduleVal: moduleVal,
+        moduleLabel: moduleLabel,
+        stage: activeEncounterStage,
+        closure: currentClosure,
+        planSummary: document.getElementById("postOpInstructions").value.trim() || "Routine evaluation",
+        dictation: document.getElementById("dictationBox").value,
+        matchedCaseData: matchedCaseData
+      };
+
+      const existingIdx = encounters.findIndex(e => e.id === activeEncounterId);
+      if (existingIdx >= 0) {
+        encounters[existingIdx] = record;
+      } else {
+        encounters.push(record);
+      }
+      saveClinicEncounters(currentClinicDate, encounters);
+    }
+
+    function loadEncounterIntoWorkspace(encounterId) {
+      const encounters = getClinicEncounters(currentClinicDate);
+      const enc = encounters.find(e => e.id === encounterId);
+      if (!enc) return;
+
+      activeEncounterId = enc.id;
+      activeEncounterStage = enc.stage || "Pre-Visit";
+      matchedCaseData = enc.matchedCaseData || null;
+
+      document.getElementById("ptName").value = enc.name;
+      document.getElementById("ptAgeGender").value = enc.ageGender;
+      document.getElementById("templateSelect").value = enc.moduleVal || "new_hip";
+      document.getElementById("postOpInstructions").value = enc.planSummary || "";
+      document.getElementById("dictationBox").value = enc.dictation || "";
+      document.getElementById("activeEncounterTag").classList.remove("hidden");
+
+      setClosure(enc.closure || "default");
+      updateStageButtons();
+      renderTemplateFields();
+
+      const alertBox = document.getElementById("matchAlert");
+      if (matchedCaseData && matchedCaseData.found) {
+        alertBox.className = "mt-3 p-3 rounded-xl border border-emerald-500/50 bg-emerald-950/30 text-emerald-300";
+        alertBox.innerHTML = `
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-xs font-bold uppercase tracking-wider">Verified Registry Post-Op</span>
+            <span class="text-[11px] font-mono">DOS: ${matchedCaseData.dos || 'Recent'}</span>
+          </div>
+          <p class="text-xs text-slate-200">s/p ${matchedCaseData.laterality || ''} ${matchedCaseData.procedure || 'Procedure'}</p>
+          <p class="text-[11px] text-slate-400">Implants: ${matchedCaseData.implants || 'Documented in OR note'}</p>
+        `;
+        alertBox.classList.remove("hidden");
+      } else {
+        alertBox.classList.add("hidden");
+      }
+
+      renderClinicRosterUI();
+      assembleNote();
+    }
+
+    function deleteEncounter(event, encounterId) {
+      event.stopPropagation();
+      const encounters = getClinicEncounters(currentClinicDate).filter(e => e.id !== encounterId);
+      if (activeEncounterId === encounterId) {
+        activeEncounterId = null;
+        document.getElementById("activeEncounterTag").classList.add("hidden");
+      }
+      saveClinicEncounters(currentClinicDate, encounters);
+    }
+
+    function renderClinicRosterUI() {
+      const encounters = getClinicEncounters(currentClinicDate);
+      document.getElementById("clinicCount").innerText = encounters.length;
+      document.getElementById("rosterBadgeCount").innerText = encounters.length;
+      document.getElementById("activeDateDisplay").innerText = currentClinicDate;
+      document.getElementById("modalClinicDateHeader").innerText = `Date: ${currentClinicDate} (${encounters.length} Patients)`;
+
+      const cardsContainer = document.getElementById("encounterCardsList");
+      if (encounters.length === 0) {
+        cardsContainer.innerHTML = `<div class="text-center py-4 text-xs text-slate-500 bg-slate-950/60 rounded-xl border border-dashed border-slate-800">No encounters queued for ${currentClinicDate}. Upload schedule photos above.</div>`;
+      } else {
+        cardsContainer.innerHTML = encounters.map((enc, idx) => {
+          const isSelected = enc.id === activeEncounterId;
+          const stageColor = enc.stage === 'Completed' ? 'text-emerald-400 border-emerald-500/40 bg-emerald-950/40'
+                           : enc.stage === 'In-Clinic' ? 'text-amber-400 border-amber-500/40 bg-amber-950/40'
+                           : 'text-blue-400 border-blue-500/40 bg-blue-950/40';
+          return `
+            <div onclick="loadEncounterIntoWorkspace('${enc.id}')" class="cursor-pointer p-2.5 rounded-xl border transition-all flex items-center justify-between ${isSelected ? 'bg-blue-950/40 border-blue-500' : 'bg-slate-950 border-slate-800 hover:border-slate-700'}">
+              <div class="min-w-0 flex-1 pr-2">
+                <div class="flex items-center gap-2">
+                  <span class="text-xs font-bold text-white truncate">${idx + 1}. ${enc.name}</span>
+                  <span class="text-[10px] text-slate-400 font-mono">${enc.ageGender}</span>
+                  <span class="text-[9px] px-1.5 py-0.5 rounded border ${stageColor}">${enc.stage || 'Pre-Visit'}</span>
+                </div>
+                <p class="text-[11px] text-slate-400 truncate mt-0.5">${enc.moduleLabel} — ${enc.planSummary}</p>
+              </div>
+              <button onclick="deleteEncounter(event, '${enc.id}')" class="p-1.5 text-slate-500 hover:text-red-400 text-xs">✕</button>
+            </div>
+          `;
+        }).join("");
+      }
+
+      // Build Plain-Text 1-Liner Roster
       let listText = `CLINIC SCREENING ROSTER - ${currentClinicDate}\n`;
       listText += `PROVIDER: Dr. Spencer Schulte, MD | DDEAMC\n`;
       listText += `------------------------------------------------------------\n`;
-
-      if (queue.length === 0) {
-        listText += `No patients queued for this clinic date.\nUse '+ Queue Pt' or scan schedules to add patients.`;
+      if (encounters.length === 0) {
+        listText += `No encounters queued for ${currentClinicDate}.`;
       } else {
-        queue.forEach((pt, idx) => {
-          listText += `${idx + 1}. ${pt.name} | ${pt.ageGender} | ${pt.module} | ${pt.planSummary}\n`;
+        encounters.forEach((enc, idx) => {
+          listText += `${idx + 1}. ${enc.name} | ${enc.ageGender} | ${enc.moduleLabel} | ${enc.planSummary}\n`;
         });
       }
       listText += `------------------------------------------------------------`;
@@ -564,9 +700,7 @@ NOTES & INTRAOPERATIVE FINDINGS:
     function toggleScreeningModal() {
       const modal = document.getElementById("screeningModal");
       modal.classList.toggle("hidden");
-      if (!modal.classList.contains("hidden")) {
-        updateClinicQueueUI();
-      }
+      if (!modal.classList.contains("hidden")) renderClinicRosterUI();
     }
 
     function copyScreeningList() {
@@ -581,40 +715,26 @@ NOTES & INTRAOPERATIVE FINDINGS:
     function shareScreeningListToKeep() {
       const text = document.getElementById("screeningListText").value;
       if (navigator.share) {
-        navigator.share({
-          title: `Clinic Roster - ${currentClinicDate}`,
-          text: text
-        }).catch(() => {});
+        navigator.share({ title: `Clinic 1-Liners - ${currentClinicDate}`, text }).catch(() => {});
       } else {
         copyScreeningList();
-        alert("Roster copied to clipboard. Paste directly into Google Keep.");
+        alert("1-Liner list copied to clipboard.");
       }
     }
 
     function clearCurrentClinicQueue() {
-      if (confirm(`Clear all queued screening patients for ${currentClinicDate}?`)) {
-        localStorage.removeItem(`orthoflow_queue_${currentClinicDate}`);
-        updateClinicQueueUI();
+      if (confirm(`Clear all queued encounters for ${currentClinicDate}?`)) {
+        localStorage.removeItem(`orthoflow_encounters_${currentClinicDate}`);
+        activeEncounterId = null;
+        document.getElementById("activeEncounterTag").classList.add("hidden");
+        renderClinicRosterUI();
       }
     }
 
-    window.addEventListener("DOMContentLoaded", () => {
-      initKeypad();
-      document.getElementById("clinicDatePicker").value = currentClinicDate;
-      loadCustomTemplatesIntoDropdown();
-      updateClinicQueueUI();
-
-      if (sessionStorage.getItem("orthoflow_unlocked") === "true") {
-        document.getElementById("pinScreen").classList.add("hidden");
-        resetInactivityTimer();
-      }
-      renderTemplateFields();
-    });
-
-    // --- Client-Side Photo OCR & Auto-Router (Memory-Safe & Downscaled) ---
-    async function processImage(input) {
-      if (!input.files || !input.files[0]) return;
-      const file = input.files[0];
+    // --- Multi-Photo Schedule Extractor (Gemini Vision via Apps Script) ---
+    async function processSchedulePhotos(input) {
+      if (!input.files || input.files.length === 0) return;
+      const files = Array.from(input.files);
 
       const progressBox = document.getElementById("ocrProgressBox");
       const progressBar = document.getElementById("ocrProgressBar");
@@ -622,50 +742,94 @@ NOTES & INTRAOPERATIVE FINDINGS:
       const statusText = document.getElementById("ocrStatusText");
 
       progressBox.classList.remove("hidden");
-      statusText.innerText = "Optimizing photo resolution...";
-      progressBar.style.width = "10%";
-      percentText.innerText = "10%";
+      let totalAdded = 0;
 
       try {
-        // 1. Downscale huge Pixel 9 Pro photo via Canvas to prevent WASM memory crash
-        const resizedDataUrl = await resizeImageForOCR(file, 1400);
+        for (let i = 0; i < files.length; i++) {
+          const pct = Math.round(((i + 0.3) / files.length) * 100);
+          progressBar.style.width = `${pct}%`;
+          percentText.innerText = `${pct}%`;
+          statusText.innerText = `Extracting schedule photo ${i + 1} of ${files.length}...`;
 
-        statusText.innerText = "Loading OCR engine...";
-        progressBar.style.width = "25%";
-        percentText.innerText = "25%";
+          const resizedDataUrl = await resizeImageForVision(files[i], 1400);
 
-        // 2. Pass logger properly to Tesseract v5 createWorker
-        const worker = await Tesseract.createWorker("eng", 1, {
-          logger: m => {
-            if (m.status === "recognizing text") {
-              const p = Math.max(25, Math.round(m.progress * 100));
-              progressBar.style.width = `${p}%`;
-              percentText.innerText = `${p}%`;
-              statusText.innerText = "Reading schedule text...";
+          const res = await fetch(WEBHOOK_URL, {
+            method: "POST",
+            body: JSON.stringify({
+              action: "parse_schedule_image",
+              imageBase64: resizedDataUrl
+            })
+          });
+
+          const extractedPatients = await res.json();
+
+          if (Array.isArray(extractedPatients)) {
+            const existingEncounters = getClinicEncounters(currentClinicDate);
+
+            for (const pt of extractedPatients) {
+              if (!pt.name) continue;
+              // Skip if patient already exists on this clinic date
+              const alreadyExists = existingEncounters.some(e => e.name.toLowerCase() === pt.name.toLowerCase());
+              if (alreadyExists) continue;
+
+              // Check surgical registry automatically for post-op linking
+              let registryMatch = null;
+              try {
+                const regRes = await fetch(`${WEBHOOK_URL}?name=${encodeURIComponent(pt.name)}`);
+                const regData = await regRes.json();
+                if (regData && regData.found) registryMatch = regData;
+              } catch (e) {}
+
+              const isPostOp = registryMatch !== null || pt.predictedModule === "postop";
+              const resolvedModule = isPostOp ? "postop" : (pt.predictedModule || "new_hip");
+              const tmplSelect = document.getElementById("templateSelect");
+              const opt = Array.from(tmplSelect.options).find(o => o.value === resolvedModule);
+              const moduleLabel = opt ? opt.text.split("(")[0].trim() : "Clinic Evaluation";
+
+              const planText = registryMatch
+                ? `s/p ${registryMatch.procedure} (${registryMatch.dos}) - ${registryMatch.postOpInstructions || 'Routine check'}`
+                : (pt.visitReason || "Initial evaluation");
+
+              existingEncounters.push({
+                id: "enc_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+                name: pt.name,
+                ageGender: pt.ageGender || "Adult",
+                moduleVal: resolvedModule,
+                moduleLabel: moduleLabel,
+                stage: "Pre-Visit",
+                closure: "default",
+                planSummary: planText,
+                dictation: pt.apptTime ? `Scheduled Time: ${pt.apptTime}\nReason: ${pt.visitReason || ''}` : (pt.visitReason || ""),
+                matchedCaseData: registryMatch
+              });
+              totalAdded++;
             }
+
+            saveClinicEncounters(currentClinicDate, existingEncounters);
           }
-        });
+        }
 
-        const ret = await worker.recognize(resizedDataUrl);
-        await worker.terminate();
+        progressBar.style.width = "100%";
+        percentText.innerText = "100%";
+        statusText.innerText = `Added ${totalAdded} encounters to ${currentClinicDate} ✓`;
 
-        const rawText = ret.data.text;
-        statusText.innerText = "Extracting patient data...";
-        parseOcrText(rawText);
+        // Auto-load the first encounter into the workspace
+        const updatedList = getClinicEncounters(currentClinicDate);
+        if (updatedList.length > 0 && !activeEncounterId) {
+          loadEncounterIntoWorkspace(updatedList[0].id);
+        }
 
-        statusText.innerText = "Scan complete ✓";
-        setTimeout(() => { progressBox.classList.add("hidden"); }, 1800);
+        setTimeout(() => { progressBox.classList.add("hidden"); }, 2500);
       } catch (err) {
-        console.error("OCR Error:", err);
-        statusText.innerText = "Scan error. Try closer crop or dictate.";
-        setTimeout(() => { progressBox.classList.add("hidden"); }, 3000);
+        console.error(err);
+        statusText.innerText = "Error parsing schedule image. Check Apps Script deployment.";
+        setTimeout(() => { progressBox.classList.add("hidden"); }, 3500);
       } finally {
-        // 3. Reset input so you can scan multiple photos back-to-back
         input.value = "";
       }
     }
 
-    function resizeImageForOCR(file, maxWidth) {
+    function resizeImageForVision(file, maxWidth) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = event => {
@@ -674,17 +838,13 @@ NOTES & INTRAOPERATIVE FINDINGS:
             const canvas = document.createElement("canvas");
             let width = img.width;
             let height = img.height;
-
             if (width > maxWidth) {
               height = Math.round((height * maxWidth) / width);
               width = maxWidth;
             }
-
             canvas.width = width;
             canvas.height = height;
             const ctx = canvas.getContext("2d");
-            // Convert to high-contrast grayscale for sharper text recognition
-            ctx.filter = "grayscale(100%) contrast(125%)";
             ctx.drawImage(img, 0, 0, width, height);
             resolve(canvas.toDataURL("image/jpeg", 0.85));
           };
@@ -695,64 +855,21 @@ NOTES & INTRAOPERATIVE FINDINGS:
         reader.readAsDataURL(file);
       });
     }
-    
 
-    function parseOcrText(text) {
-      const nameMatch = text.match(/(?:NAME|PATIENT):\s*([A-Za-z]+,\s*[A-Za-z]+)/i) || 
-                        text.match(/([A-Z][a-z]+,\s+[A-Z][a-z]+)/) ||
-                        text.match(/(?:NAME|PATIENT):\s*([A-Za-z]+\s+[A-Za-z]+)/i);
-      if (nameMatch) {
-        document.getElementById("ptName").value = nameMatch[1].trim();
+    window.addEventListener("DOMContentLoaded", () => {
+      initKeypad();
+      document.getElementById("clinicDatePicker").value = currentClinicDate;
+      loadCustomTemplatesIntoDropdown();
+      renderClinicRosterUI();
+
+      if (sessionStorage.getItem("orthoflow_unlocked") === "true") {
+        document.getElementById("pinScreen").classList.add("hidden");
+        resetInactivityTimer();
       }
+      renderTemplateFields();
+    });
 
-      const ageSexMatch = text.match(/(\d{2})\s*(?:yo\s*)?([MF])/i) || 
-                          text.match(/(\d{2})\s*\/\s*([MF])/i);
-      if (ageSexMatch) {
-        document.getElementById("ptAgeGender").value = `${ageSexMatch[1]}${ageSexMatch[2].toUpperCase()}`;
-      }
-
-      const currentDict = document.getElementById("dictationBox").value;
-      document.getElementById("dictationBox").value = (currentDict ? currentDict + "\n\n" : "") + "[OCR EXTRACT]:\n" + text.trim();
-      
-      predictModuleFromText(text);
-
-      if (nameMatch) {
-        lookupPatient();
-      } else {
-        assembleNote();
-      }
-    }
-
-    function predictModuleFromText(text) {
-      const lower = text.toLowerCase();
-      let predictedModule = null;
-
-      if (lower.includes("postop") || lower.includes("post-op") || lower.includes("follow up") || lower.includes("f/u")) {
-        predictedModule = "postop";
-      } else if (lower.includes("painful") || lower.includes("failed") || lower.includes("pji") || lower.includes("loosening")) {
-        predictedModule = "painful_joint";
-      } else if (lower.includes("hip") || lower.includes("groin") || lower.includes("trochanter")) {
-        predictedModule = "new_hip";
-      } else if (lower.includes("knee") || lower.includes("osteoarthritis") || lower.includes("meniscus")) {
-        predictedModule = "new_knee";
-      } else if (lower.includes("phone") || lower.includes("tele") || lower.includes("call") || lower.includes("review")) {
-        predictedModule = "telehealth";
-      } else if (lower.includes("shoulder") || lower.includes("cuff") || lower.includes("labrum")) {
-        predictedModule = "sports";
-      } else if (lower.includes("femur") || lower.includes("hip fx") || lower.includes("neck fx") || lower.includes("intertroch")) {
-        predictedModule = "hip_fx";
-      }
-
-      if (predictedModule) {
-        document.getElementById("templateSelect").value = predictedModule;
-        const badge = document.getElementById("autoRoutedBadge");
-        badge.innerText = `Auto-Routed: ${predictedModule}`;
-        badge.classList.remove("hidden");
-        renderTemplateFields();
-      }
-    }
-
-    // --- Gemini AI Dictation Parser & Parameter Distributor ---
+    // --- Gemini AI Dictation Parser ---
     async function parseDictationWithAI() {
       const dictationText = document.getElementById("dictationBox").value.trim();
       if (!dictationText) {
@@ -764,45 +881,29 @@ NOTES & INTRAOPERATIVE FINDINGS:
       btn.innerText = "Parsing with AI...";
       btn.disabled = true;
 
-      const payload = {
-        action: "parse_dictation",
-        transcript: dictationText,
-        moduleType: document.getElementById("templateSelect").value
-      };
-
       try {
         const res = await fetch(WEBHOOK_URL, {
           method: "POST",
-          body: JSON.stringify(payload)
+          body: JSON.stringify({
+            action: "parse_dictation",
+            transcript: dictationText,
+            moduleType: document.getElementById("templateSelect").value
+          })
         });
         const parsed = await res.json();
 
         if (parsed.patientName && !document.getElementById("ptName").value) {
           document.getElementById("ptName").value = parsed.patientName;
         }
-        if (parsed.ageGender) {
-          document.getElementById("ptAgeGender").value = parsed.ageGender;
-        }
-        if (parsed.ebl && document.getElementById("opEbl")) {
-          document.getElementById("opEbl").value = parsed.ebl;
-        }
-        if (parsed.implants && document.getElementById("opImplants")) {
-          document.getElementById("opImplants").value = parsed.implants;
-        }
-        if (parsed.postOpInstructions) {
-          document.getElementById("postOpInstructions").value = parsed.postOpInstructions;
-        }
-        if (parsed.closure) {
-          setClosure(parsed.closure.toLowerCase());
-        }
-        if (parsed.laterality && document.getElementById("lat")) {
-          document.getElementById("lat").value = parsed.laterality;
-        }
+        if (parsed.ageGender) document.getElementById("ptAgeGender").value = parsed.ageGender;
+        if (parsed.ebl && document.getElementById("opEbl")) document.getElementById("opEbl").value = parsed.ebl;
+        if (parsed.implants && document.getElementById("opImplants")) document.getElementById("opImplants").value = parsed.implants;
+        if (parsed.postOpInstructions) document.getElementById("postOpInstructions").value = parsed.postOpInstructions;
+        if (parsed.closure) setClosure(parsed.closure.toLowerCase());
+        if (parsed.laterality && document.getElementById("lat")) document.getElementById("lat").value = parsed.laterality;
+        if (parsed.remainingNotes) document.getElementById("dictationBox").value = parsed.remainingNotes;
 
-        if (parsed.remainingNotes) {
-          document.getElementById("dictationBox").value = parsed.remainingNotes;
-        }
-
+        autoSaveCurrentEncounter();
         assembleNote();
         btn.innerText = "Distributed ✓";
         setTimeout(() => {
@@ -822,13 +923,12 @@ NOTES & INTRAOPERATIVE FINDINGS:
       ['Default', 'Prineo', 'Prevena'].forEach(name => {
         const btn = document.getElementById('btnClosure' + name);
         if (btn) {
-          if (name.toLowerCase() === type) {
-            btn.className = "py-2 px-1 rounded-xl text-center border text-[11px] font-medium border-blue-500 bg-blue-600/20 text-white";
-          } else {
-            btn.className = "py-2 px-1 rounded-xl text-center border text-[11px] font-medium border-slate-800 bg-slate-950 text-slate-400";
-          }
+          btn.className = name.toLowerCase() === type
+            ? "py-2 px-1 rounded-xl text-center border text-[11px] font-medium border-blue-500 bg-blue-600/20 text-white"
+            : "py-2 px-1 rounded-xl text-center border text-[11px] font-medium border-slate-800 bg-slate-950 text-slate-400";
         }
       });
+      autoSaveCurrentEncounter();
       assembleNote();
     }
 
@@ -836,6 +936,11 @@ NOTES & INTRAOPERATIVE FINDINGS:
       if (currentClosure === 'prineo') return "Deep dermal closure with 3-0 Stratafix, Dermabond Prineo topical mesh tape, and bordered Mepilex dressing.";
       if (currentClosure === 'prevena') return "Deep layers reapproximated with 3-0 Stratafix. Prevena closed-incision negative pressure therapy (ciNPT) dressing applied at -125 mmHg continuous suction. Patient instructed on 7-day battery life and peel-off protocol.";
       return "Fascia and subcutaneous tissues closed with barbed 3-0 Stratafix. Skin reapproximated with Sylke suture strips and sterile Aquacel Ag surgical barrier dressing.";
+    }
+
+    function onModuleChanged() {
+      renderTemplateFields();
+      autoSaveCurrentEncounter();
     }
 
     // --- Dynamic Form Renderer ---
@@ -874,13 +979,13 @@ NOTES & INTRAOPERATIVE FINDINGS:
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Laterality</label>
-              <select id="lat" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <select id="lat" onchange="assembleNote()" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
                 <option value="Right">Right</option><option value="Left">Left</option><option value="Bilateral">Bilateral</option>
               </select>
             </div>
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Primary Etiology</label>
-              <select id="etiology" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <select id="etiology" onchange="assembleNote()" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
                 <option value="Primary Osteoarthritis">Primary Osteoarthritis (KL 4)</option>
                 <option value="Avascular Necrosis">Avascular Necrosis (Stage III/IV)</option>
                 <option value="Developmental Dysplasia">Developmental Dysplasia</option>
@@ -890,11 +995,11 @@ NOTES & INTRAOPERATIVE FINDINGS:
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Internal Rotation (90°)</label>
-              <input id="hipIR" type="text" value="5°" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <input id="hipIR" oninput="assembleNote()" type="text" value="5°" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
             </div>
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Flexion Contracture</label>
-              <input id="hipFC" type="text" value="0°" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <input id="hipFC" oninput="assembleNote()" type="text" value="0°" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
             </div>
           </div>
         `;
@@ -903,13 +1008,13 @@ NOTES & INTRAOPERATIVE FINDINGS:
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Laterality</label>
-              <select id="lat" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <select id="lat" onchange="assembleNote()" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
                 <option value="Right">Right</option><option value="Left">Left</option><option value="Bilateral">Bilateral</option>
               </select>
             </div>
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Compartment</label>
-              <select id="kneeComp" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <select id="kneeComp" onchange="assembleNote()" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
                 <option value="Tricompartmental">Tricompartmental (TKA candidate)</option>
                 <option value="Isolated Medial">Isolated Medial (Oxford UKA candidate)</option>
                 <option value="Patellofemoral">Patellofemoral Predominant</option>
@@ -919,11 +1024,11 @@ NOTES & INTRAOPERATIVE FINDINGS:
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Knee ROM</label>
-              <input id="kneeROM" type="text" value="0° - 110°" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <input id="kneeROM" oninput="assembleNote()" type="text" value="0° - 110°" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
             </div>
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Stability Exam</label>
-              <input id="kneeStab" type="text" value="Stable varus/valgus, intact ACL" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <input id="kneeStab" oninput="assembleNote()" type="text" value="Stable varus/valgus, intact ACL" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
             </div>
           </div>
         `;
@@ -932,21 +1037,21 @@ NOTES & INTRAOPERATIVE FINDINGS:
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Joint & Laterality</label>
-              <input id="jointId" type="text" value="Right Total Knee Arthroplasty" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <input id="jointId" oninput="assembleNote()" type="text" value="Right Total Knee Arthroplasty" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
             </div>
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Pain-Free Interval</label>
-              <input id="pfi" type="text" value="5-year pain-free interval prior to acute onset" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <input id="pfi" oninput="assembleNote()" type="text" value="5-year pain-free interval prior to acute onset" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
             </div>
           </div>
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Serologies (ESR / CRP)</label>
-              <input id="pjiLabs" type="text" value="ESR: 14 mm/hr | CRP: 2.1 mg/L" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <input id="pjiLabs" oninput="assembleNote()" type="text" value="ESR: 14 mm/hr | CRP: 2.1 mg/L" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
             </div>
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Synovial Aspiration</label>
-              <input id="pjiAsp" type="text" value="WBC: 850 /mcL, 22% PMN, LE neg" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <input id="pjiAsp" oninput="assembleNote()" type="text" value="WBC: 850 /mcL, 22% PMN, LE neg" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
             </div>
           </div>
         `;
@@ -955,7 +1060,7 @@ NOTES & INTRAOPERATIVE FINDINGS:
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Post-Op Interval</label>
-              <select id="postopInterval" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <select id="postopInterval" onchange="assembleNote()" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
                 <option value="2-Week">2-Week Incision & Motion Check</option>
                 <option value="6-Week">6-Week Milestone & Radiographs</option>
                 <option value="12-Week">12-Week Functional Progress</option>
@@ -964,7 +1069,7 @@ NOTES & INTRAOPERATIVE FINDINGS:
             </div>
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Incision Appearance</label>
-              <input id="postopIncision" type="text" value="Clean, dry, intact; no erythema or drainage" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <input id="postopIncision" oninput="assembleNote()" type="text" value="Clean, dry, intact; no erythema or drainage" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
             </div>
           </div>
         `;
@@ -973,24 +1078,24 @@ NOTES & INTRAOPERATIVE FINDINGS:
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Region</label>
-              <select id="sportsRegion" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <select id="sportsRegion" onchange="assembleNote()" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
                 <option value="Knee">Knee (ACL/Meniscus)</option>
                 <option value="Shoulder">Shoulder (Cuff/Labrum)</option>
               </select>
             </div>
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Injury Mechanism</label>
-              <input id="sportsMech" type="text" value="Non-contact pivot injury with audible pop & immediate effusion" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <input id="sportsMech" oninput="assembleNote()" type="text" value="Non-contact pivot injury with audible pop & immediate effusion" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
             </div>
           </div>
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Special Tests</label>
-              <input id="sportsTests" type="text" value="Lachman 2B, Pivot Shift positive, McMurray medial line tenderness" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <input id="sportsTests" oninput="assembleNote()" type="text" value="Lachman 2B, Pivot Shift positive, McMurray medial line tenderness" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
             </div>
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">MRI Review</label>
-              <input id="sportsMri" type="text" value="Complete mid-substance ACL tear, medial meniscus tear" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <input id="sportsMri" oninput="assembleNote()" type="text" value="Complete mid-substance ACL tear, medial meniscus tear" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
             </div>
           </div>
         `;
@@ -999,7 +1104,7 @@ NOTES & INTRAOPERATIVE FINDINGS:
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Classification</label>
-              <select id="hipFxType" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <select id="hipFxType" onchange="assembleNote()" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
                 <option value="Displaced Femoral Neck">Displaced Femoral Neck (Garden IV)</option>
                 <option value="Intertrochanteric (Stable)">Intertrochanteric (Stable 2-part)</option>
                 <option value="Intertrochanteric (Unstable)">Intertrochanteric (Unstable / Reverse Obliquity)</option>
@@ -1008,7 +1113,7 @@ NOTES & INTRAOPERATIVE FINDINGS:
             </div>
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Surgical Plan</label>
-              <select id="hipFxPlan" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <select id="hipFxPlan" onchange="assembleNote()" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
                 <option value="Bipolar Hemiarthroplasty">Bipolar Hemiarthroplasty (Direct Anterior)</option>
                 <option value="Total Hip Arthroplasty">Total Hip Arthroplasty</option>
                 <option value="Cephalomedullary Nail">Cephalomedullary Nail (Stryker Gamma4 / Synthes TFNA)</option>
@@ -1019,11 +1124,11 @@ NOTES & INTRAOPERATIVE FINDINGS:
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Anticoagulation</label>
-              <input id="hipFxCoag" type="text" value="Eliquis held at ED presentation; cleared for OR tomorrow AM" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <input id="hipFxCoag" oninput="assembleNote()" type="text" value="Eliquis held at ED presentation; cleared for OR tomorrow AM" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
             </div>
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Regional Block</label>
-              <input id="hipFxBlock" type="text" value="Fascia Iliaca Compartment Block performed in ED" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <input id="hipFxBlock" oninput="assembleNote()" type="text" value="Fascia Iliaca Compartment Block performed in ED" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
             </div>
           </div>
         `;
@@ -1032,21 +1137,21 @@ NOTES & INTRAOPERATIVE FINDINGS:
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Injury</label>
-              <input id="genFxInjury" type="text" value="Right Distal Radius / Ankle Fracture" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <input id="genFxInjury" oninput="assembleNote()" type="text" value="Right Distal Radius / Ankle Fracture" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
             </div>
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Status</label>
-              <input id="genFxClass" type="text" value="Closed, Gustilo-Anderson 0, compartments soft" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <input id="genFxClass" oninput="assembleNote()" type="text" value="Closed, Gustilo-Anderson 0, compartments soft" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
             </div>
           </div>
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Reduction & Splint</label>
-              <input id="genFxSplint" type="text" value="Closed reduction under hematoma block, sugar-tong splint applied" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <input id="genFxSplint" oninput="assembleNote()" type="text" value="Closed reduction under hematoma block, sugar-tong splint applied" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
             </div>
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Disposition</label>
-              <input id="genFxDisp" type="text" value="Discharged from ED; clinic follow-up in 5 days" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <input id="genFxDisp" oninput="assembleNote()" type="text" value="Discharged from ED; clinic follow-up in 5 days" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
             </div>
           </div>
         `;
@@ -1055,7 +1160,7 @@ NOTES & INTRAOPERATIVE FINDINGS:
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Billing Code</label>
-              <select id="teleCode" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <select id="teleCode" onchange="assembleNote()" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
                 <option value="99442 (11-20 min medical discussion)">99442 (11-20 min)</option>
                 <option value="99441 (5-10 min medical discussion)">99441 (5-10 min)</option>
                 <option value="99443 (21-30 min medical discussion)">99443 (21-30 min)</option>
@@ -1063,7 +1168,7 @@ NOTES & INTRAOPERATIVE FINDINGS:
             </div>
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Reason for Call</label>
-              <input id="teleReason" type="text" value="Review of Diagnostic MRI & Lab Cultures" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <input id="teleReason" oninput="assembleNote()" type="text" value="Review of Diagnostic MRI & Lab Cultures" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
             </div>
           </div>
         `;
@@ -1072,14 +1177,14 @@ NOTES & INTRAOPERATIVE FINDINGS:
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Incision Style</label>
-              <select id="opDaInc" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <select id="opDaInc" onchange="assembleNote()" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
                 <option value="Bikini (Oblique Groin Crease)">Bikini (Oblique Groin Crease)</option>
                 <option value="Standard Longitudinal Direct Anterior">Standard Longitudinal DA</option>
               </select>
             </div>
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Stem Fixation (Zimmer Biomet)</label>
-              <select id="opDaStem" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <select id="opDaStem" onchange="assembleNote()" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
                 <option value="Zimmer Biomet Z1 Collared Pressfit Stem">ZB Z1 Collared Pressfit Stem</option>
                 <option value="Zimmer Biomet Z1 Cemented Stem">ZB Z1 Cemented Stem</option>
               </select>
@@ -1088,11 +1193,11 @@ NOTES & INTRAOPERATIVE FINDINGS:
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Implants Detailed</label>
-              <input id="opImplants" type="text" value="Zimmer Biomet: Z1 Stem Size 7 Standard Offset, G7 54mm OsseoTi Cup, 36mm +0 Delta Head, E1 Poly" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <input id="opImplants" oninput="assembleNote()" type="text" value="Zimmer Biomet: Z1 Stem Size 7 Standard Offset, G7 54mm OsseoTi Cup, 36mm +0 Delta Head, E1 Poly" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
             </div>
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">EBL</label>
-              <input id="opEbl" type="text" value="100 cc" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <input id="opEbl" oninput="assembleNote()" type="text" value="100 cc" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
             </div>
           </div>
         `;
@@ -1101,7 +1206,7 @@ NOTES & INTRAOPERATIVE FINDINGS:
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Constraint (Zimmer Biomet)</label>
-              <select id="opTkaConst" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <select id="opTkaConst" onchange="assembleNote()" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
                 <option value="Persona Cruciate Retaining (CR)">Persona CR (Cruciate Retaining)</option>
                 <option value="Persona Posterior Stabilized (PS)">Persona PS (Posterior Stabilized)</option>
                 <option value="Persona Medial Congruent (MC)">Persona MC (Medial Congruent)</option>
@@ -1109,7 +1214,7 @@ NOTES & INTRAOPERATIVE FINDINGS:
             </div>
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Patella Resurfacing</label>
-              <select id="opTkaPatella" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <select id="opTkaPatella" onchange="assembleNote()" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
                 <option value="Resurfaced (Persona 3-peg cemented)">Resurfaced (Persona 3-peg cemented)</option>
                 <option value="Patelloplasty (Unresurfaced)">Patelloplasty (Unresurfaced)</option>
               </select>
@@ -1118,11 +1223,11 @@ NOTES & INTRAOPERATIVE FINDINGS:
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Implants Detailed</label>
-              <input id="opImplants" type="text" value="Zimmer Biomet Persona: Femur Size 7, Tibia Size E Cemented, 10mm CR Poly, 32mm Patella" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <input id="opImplants" oninput="assembleNote()" type="text" value="Zimmer Biomet Persona: Femur Size 7, Tibia Size E Cemented, 10mm CR Poly, 32mm Patella" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
             </div>
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">EBL</label>
-              <input id="opEbl" type="text" value="50 cc" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <input id="opEbl" oninput="assembleNote()" type="text" value="50 cc" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
             </div>
           </div>
         `;
@@ -1131,14 +1236,14 @@ NOTES & INTRAOPERATIVE FINDINGS:
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Approach</label>
-              <select id="opHemiApp" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <select id="opHemiApp" onchange="assembleNote()" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
                 <option value="Direct Anterior">Direct Anterior (DA)</option>
                 <option value="Posterolateral">Posterolateral</option>
               </select>
             </div>
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Stem Fixation</label>
-              <select id="opHemiStem" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <select id="opHemiStem" onchange="assembleNote()" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
                 <option value="Zimmer Biomet Z1 Collared Pressfit">ZB Z1 Collared Pressfit</option>
                 <option value="Zimmer Biomet CPT / Z1 Cemented">ZB CPT / Z1 Cemented</option>
               </select>
@@ -1147,11 +1252,11 @@ NOTES & INTRAOPERATIVE FINDINGS:
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Implants Detailed</label>
-              <input id="opImplants" type="text" value="Zimmer Biomet: Z1 Collared Stem, 44mm Bipolar Outer Head with 28mm +0 CoCr Inner Head" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <input id="opImplants" oninput="assembleNote()" type="text" value="Zimmer Biomet: Z1 Collared Stem, 44mm Bipolar Outer Head with 28mm +0 CoCr Inner Head" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
             </div>
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">EBL</label>
-              <input id="opEbl" type="text" value="100 cc" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <input id="opEbl" oninput="assembleNote()" type="text" value="100 cc" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
             </div>
           </div>
         `;
@@ -1160,24 +1265,24 @@ NOTES & INTRAOPERATIVE FINDINGS:
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Spacer Type</label>
-              <select id="opStage1Spacer" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <select id="opStage1Spacer" onchange="assembleNote()" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
                 <option value="Articulating Antibiotic Cement Spacer">Articulating Antibiotic Spacer</option>
                 <option value="Static High-Dose Antibiotic Cement Block">Static High-Dose Spacer Block</option>
               </select>
             </div>
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Antibiotic Load</label>
-              <input id="opStage1Abx" type="text" value="3g Vancomycin + 2.4g Tobramycin per 40g Simplex cement batch" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <input id="opStage1Abx" oninput="assembleNote()" type="text" value="3g Vancomycin + 2.4g Tobramycin per 40g Simplex cement batch" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
             </div>
           </div>
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Explant Details</label>
-              <input id="opImplants" type="text" value="Complete explantation of femoral and acetabular/tibial components, thorough radical synovectomy" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <input id="opImplants" oninput="assembleNote()" type="text" value="Complete explantation of femoral and acetabular/tibial components, thorough radical synovectomy" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
             </div>
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">EBL</label>
-              <input id="opEbl" type="text" value="250 cc" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <input id="opEbl" oninput="assembleNote()" type="text" value="250 cc" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
             </div>
           </div>
         `;
@@ -1186,21 +1291,21 @@ NOTES & INTRAOPERATIVE FINDINGS:
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Regional IO Antibiotic</label>
-              <input id="opIoVanc" type="text" value="1g Vancomycin in 100mL saline via proximal tibial intraosseous line" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <input id="opIoVanc" oninput="assembleNote()" type="text" value="1g Vancomycin in 100mL saline via proximal tibial intraosseous line" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
             </div>
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Explant Liner</label>
-              <input id="opExplant" type="text" value="Zimmer Biomet Persona 10mm PS Polyethylene Liner (atraumatically removed)" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <input id="opExplant" oninput="assembleNote()" type="text" value="Zimmer Biomet Persona 10mm PS Polyethylene Liner (atraumatically removed)" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
             </div>
           </div>
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">New Implant Liner</label>
-              <input id="opImplants" type="text" value="Zimmer Biomet Persona: 14mm Constrained Condylar (CCK) Polyethylene Liner" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <input id="opImplants" oninput="assembleNote()" type="text" value="Zimmer Biomet Persona: 14mm Constrained Condylar (CCK) Polyethylene Liner" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
             </div>
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">EBL</label>
-              <input id="opEbl" type="text" value="75 cc" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <input id="opEbl" oninput="assembleNote()" type="text" value="75 cc" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
             </div>
           </div>
         `;
@@ -1209,24 +1314,24 @@ NOTES & INTRAOPERATIVE FINDINGS:
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Implant System</label>
-              <select id="opPlateauSys" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <select id="opPlateauSys" onchange="assembleNote()" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
                 <option value="Synthes 3.5mm LPHP (Variable Angle)">Synthes 3.5mm VA-LPHP</option>
                 <option value="Stryker AxSOS 3 Proximal Lateral Plate">Stryker AxSOS 3 Lateral Plate</option>
               </select>
             </div>
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Subchondral Raft</label>
-              <input id="opPlateauGraft" type="text" value="Subchondral raft screw construct with allograft cancellous croutons" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <input id="opPlateauGraft" oninput="assembleNote()" type="text" value="Subchondral raft screw construct with allograft cancellous croutons" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
             </div>
           </div>
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Construct</label>
-              <input id="opImplants" type="text" value="Synthes 3.5mm Anterolateral Proximal Tibial Plate (6-hole) with subchondral raft screws" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <input id="opImplants" oninput="assembleNote()" type="text" value="Synthes 3.5mm Anterolateral Proximal Tibial Plate (6-hole) with subchondral raft screws" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
             </div>
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">EBL</label>
-              <input id="opEbl" type="text" value="100 cc" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <input id="opEbl" oninput="assembleNote()" type="text" value="100 cc" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
             </div>
           </div>
         `;
@@ -1235,21 +1340,21 @@ NOTES & INTRAOPERATIVE FINDINGS:
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Approach</label>
-              <input id="opMedApproach" type="text" value="Lobonhoffer / Posteromedial approach with 3.5mm T-buttress plate" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <input id="opMedApproach" oninput="assembleNote()" type="text" value="Lobonhoffer / Posteromedial approach with 3.5mm T-buttress plate" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
             </div>
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Implants</label>
-              <input id="opImplants" type="text" value="Synthes / Stryker 3.5mm Low Profile Posteromedial Buttress Plate" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <input id="opImplants" oninput="assembleNote()" type="text" value="Synthes / Stryker 3.5mm Low Profile Posteromedial Buttress Plate" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
             </div>
           </div>
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Reduction</label>
-              <input id="opMedRed" type="text" value="Anatomic apex and articular reduction confirmed via fluoroscopy" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <input id="opMedRed" oninput="assembleNote()" type="text" value="Anatomic apex and articular reduction confirmed via fluoroscopy" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
             </div>
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">EBL</label>
-              <input id="opEbl" type="text" value="75 cc" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <input id="opEbl" oninput="assembleNote()" type="text" value="75 cc" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
             </div>
           </div>
         `;
@@ -1258,21 +1363,21 @@ NOTES & INTRAOPERATIVE FINDINGS:
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Construct</label>
-              <input id="opBiconConstruct" type="text" value="Dual incision: Anterolateral raft plate + Posteromedial buttress plate" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <input id="opBiconConstruct" oninput="assembleNote()" type="text" value="Dual incision: Anterolateral raft plate + Posteromedial buttress plate" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
             </div>
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Hardware</label>
-              <input id="opImplants" type="text" value="Synthes / Stryker: Lateral 3.5mm VA-LPHP plate + Medial 3.5mm LCDCP buttress plate" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <input id="opImplants" oninput="assembleNote()" type="text" value="Synthes / Stryker: Lateral 3.5mm VA-LPHP plate + Medial 3.5mm LCDCP buttress plate" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
             </div>
           </div>
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">EBL</label>
-              <input id="opEbl" type="text" value="150 cc" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <input id="opEbl" oninput="assembleNote()" type="text" value="150 cc" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
             </div>
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Reduction</label>
-              <input id="opBiconRed" type="text" value="Direct visualization via submeniscal arthrotomy, subchondral raft rigid fixation" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <input id="opBiconRed" oninput="assembleNote()" type="text" value="Direct visualization via submeniscal arthrotomy, subchondral raft rigid fixation" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
             </div>
           </div>
         `;
@@ -1281,24 +1386,24 @@ NOTES & INTRAOPERATIVE FINDINGS:
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Plate Position</label>
-              <select id="opClavPos" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <select id="opClavPos" onchange="assembleNote()" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
                 <option value="Superior Precontoured (Synthes / Stryker)">Superior Precontoured (Synthes / Stryker)</option>
                 <option value="Anteroinferior Precontoured">Anteroinferior Precontoured</option>
               </select>
             </div>
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Implants Detailed</label>
-              <input id="opImplants" type="text" value="Synthes 2.7mm/3.5mm VA Clavicle Plate (7-hole) with lag screw technique" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <input id="opImplants" oninput="assembleNote()" type="text" value="Synthes 2.7mm/3.5mm VA Clavicle Plate (7-hole) with lag screw technique" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
             </div>
           </div>
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">EBL</label>
-              <input id="opEbl" type="text" value="25 cc" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <input id="opEbl" oninput="assembleNote()" type="text" value="25 cc" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
             </div>
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Supraclavicular Nerves</label>
-              <input id="opClavNerve" type="text" value="Supraclavicular cutaneous branches mobilized and carefully protected" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <input id="opClavNerve" oninput="assembleNote()" type="text" value="Supraclavicular cutaneous branches mobilized and carefully protected" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
             </div>
           </div>
         `;
@@ -1307,21 +1412,21 @@ NOTES & INTRAOPERATIVE FINDINGS:
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Fixation Construct</label>
-              <input id="opFemurConst" type="text" value="Lateral Locking Periprosthetic Plate + Proximal Dall-Miles / Cerclage Cables" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <input id="opFemurConst" oninput="assembleNote()" type="text" value="Lateral Locking Periprosthetic Plate + Proximal Dall-Miles / Cerclage Cables" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
             </div>
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Implant Systems</label>
-              <input id="opImplants" type="text" value="Stryker AxSOS 3 / Synthes VA-LCP Periprosthetic Plate + 2x Cerclage Cables" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <input id="opImplants" oninput="assembleNote()" type="text" value="Stryker AxSOS 3 / Synthes VA-LCP Periprosthetic Plate + 2x Cerclage Cables" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
             </div>
           </div>
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Stem Stability</label>
-              <input id="opFemurStem" type="text" value="Underlying femoral arthroplasty stem inspected and confirmed solidly fixed (Vancouver B1)" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <input id="opFemurStem" oninput="assembleNote()" type="text" value="Underlying femoral arthroplasty stem inspected and confirmed solidly fixed (Vancouver B1)" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
             </div>
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">EBL</label>
-              <input id="opEbl" type="text" value="150 cc" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <input id="opEbl" oninput="assembleNote()" type="text" value="150 cc" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
             </div>
           </div>
         `;
@@ -1374,6 +1479,7 @@ NOTES & INTRAOPERATIVE FINDINGS:
             ${isNonRoutine ? `<div class="mt-2 text-xs font-semibold text-amber-400 bg-amber-900/40 p-2 rounded-lg border border-amber-600/40">⚠ PROTOCOL ALERT: ${data.postOpInstructions}</div>` : ''}
           `;
           alertBox.classList.remove("hidden");
+          autoSaveCurrentEncounter();
           assembleNote();
         } else {
           alertBox.className = "mt-3 p-3 rounded-xl border border-slate-800 bg-slate-950 text-slate-400 text-xs";
@@ -1608,7 +1714,6 @@ NOTES & INTRAOPERATIVE FINDINGS:
       document.getElementById("noteOutput").value = note;
     }
 
-    // --- Clipboard & Native Share Export ---
     function copyNote() {
       const note = document.getElementById("noteOutput").value;
       navigator.clipboard.writeText(note).then(() => {
@@ -1622,10 +1727,7 @@ NOTES & INTRAOPERATIVE FINDINGS:
       const note = document.getElementById("noteOutput").value;
       const ptName = document.getElementById("ptName").value || "Patient";
       if (navigator.share) {
-        navigator.share({
-          title: `Ortho Note - ${ptName}`,
-          text: note
-        }).catch(() => {});
+        navigator.share({ title: `Ortho Note - ${ptName}`, text: note }).catch(() => {});
       } else {
         copyNote();
         alert("Note copied to clipboard.");
