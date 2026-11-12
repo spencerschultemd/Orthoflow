@@ -56,19 +56,25 @@
   </div>
 
   <!-- ================= TOP HEADER ================= -->
-  <header class="sticky top-0 z-40 bg-[#0f172a]/95 backdrop-blur border-b border-slate-800 px-4 py-3 flex items-center justify-between">
-    <div class="flex items-center gap-2">
-      <div class="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center font-bold text-white text-xs">OF</div>
-      <div>
-        <h1 class="text-sm font-bold text-white leading-tight">OrthoFlow</h1>
-        <p class="text-[10px] text-slate-400">Dr. Spencer Schulte | DDEAMC</p>
+  <header class="sticky top-0 z-40 bg-[#0f172a]/95 backdrop-blur border-b border-slate-800 px-3 py-2.5 flex items-center justify-between gap-2">
+    <div class="flex items-center gap-2 min-w-0">
+      <div class="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center font-bold text-white text-xs shrink-0">OF</div>
+      <div class="truncate">
+        <h1 class="text-sm font-bold text-white leading-tight truncate">OrthoFlow</h1>
+        <p class="text-[10px] text-slate-400 truncate">Dr. Spencer Schulte | DDEAMC</p>
       </div>
     </div>
-    <div class="flex items-center gap-2">
-      <button onclick="toggleScreeningModal()" class="px-2.5 py-1 rounded-lg bg-emerald-600/20 border border-emerald-500/40 text-xs text-emerald-300 font-medium active:bg-emerald-600/30">
+    <div class="flex items-center gap-1.5 shrink-0">
+      <button onclick="toggleApiKeyModal()" id="apiKeyStatusBtn" class="px-2 py-1 rounded-lg bg-purple-600/20 border border-purple-500/40 text-[11px] text-purple-300 font-medium active:bg-purple-600/30">
+        API Key
+      </button>
+      <button onclick="toggleRegistryModal()" class="px-2 py-1 rounded-lg bg-blue-600/20 border border-blue-500/40 text-[11px] text-blue-300 font-medium active:bg-blue-600/30">
+        Cases (<span id="registryCount">0</span>)
+      </button>
+      <button onclick="toggleScreeningModal()" class="px-2 py-1 rounded-lg bg-emerald-600/20 border border-emerald-500/40 text-[11px] text-emerald-300 font-medium active:bg-emerald-600/30">
         1-Liners (<span id="clinicCount">0</span>)
       </button>
-      <button onclick="lockApp()" class="px-2.5 py-1 rounded-lg bg-slate-800 border border-slate-700 text-xs text-slate-300 font-medium active:bg-slate-700">Lock</button>
+      <button onclick="lockApp()" class="px-2 py-1 rounded-lg bg-slate-800 border border-slate-700 text-[11px] text-slate-300 font-medium active:bg-slate-700">Lock</button>
     </div>
   </header>
 
@@ -88,22 +94,28 @@
         </button>
       </div>
 
-      <!-- Batch Schedule Photo Uploader -->
-      <div class="pt-2.5 border-t border-slate-800 flex items-center justify-between">
+      <!-- Batch Schedule Photo Uploader (Camera + Gallery) -->
+      <div class="pt-2.5 border-t border-slate-800 flex items-center justify-between gap-2">
         <div>
           <span class="text-xs font-bold text-white flex items-center gap-1.5">
             <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
             </svg>
-            Import Clinic Schedule Photos
+            Import Schedule Photos
           </span>
-          <p class="text-[10px] text-slate-400">Select 1+ schedule photos to extract all patients</p>
+          <p class="text-[10px] text-slate-400">Auto-detects date & extracts all patients</p>
         </div>
-        <label class="cursor-pointer px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold active:bg-blue-700 transition-colors">
-          Upload Photos
-          <input type="file" id="ocrInput" accept="image/*" multiple class="hidden" onchange="processSchedulePhotos(this)">
-        </label>
+        <div class="flex gap-1.5 shrink-0">
+          <label class="cursor-pointer px-2.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold active:bg-blue-700 transition-colors">
+            Camera
+            <input type="file" accept="image/*" capture="environment" class="hidden" onchange="processSchedulePhotos(this)">
+          </label>
+          <label class="cursor-pointer px-2.5 py-1.5 rounded-xl bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-200 text-xs font-semibold active:bg-slate-600 transition-colors">
+            Gallery
+            <input type="file" id="ocrInput" accept="image/*" multiple class="hidden" onchange="processSchedulePhotos(this)">
+          </label>
+        </div>
       </div>
 
       <!-- Multi-Photo Progress Bar -->
@@ -141,7 +153,7 @@
             Save to Date
           </button>
           <button onclick="lookupPatient()" id="matchBtn" class="px-2.5 py-1 rounded-lg bg-blue-600/20 border border-blue-500/40 text-blue-400 text-xs font-medium active:bg-blue-600/30">
-            Match Registry
+            Match Case DB
           </button>
         </div>
       </div>
@@ -241,7 +253,7 @@
     <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4">
       <div class="flex justify-between items-center mb-1.5">
         <label class="text-[10px] text-slate-400 font-semibold tracking-wider uppercase">1-Liner Plan / Precautions</label>
-        <span class="text-[10px] text-amber-400 font-medium">Populates 1-Liner & Registry</span>
+        <span class="text-[10px] text-amber-400 font-medium">Saves to Case DB & 1-Liner</span>
       </div>
       <input id="postOpInstructions" oninput="autoSaveCurrentEncounter(); assembleNote();" type="text" placeholder="e.g. Discuss DA-THA, KL-4 OA, NWB 6 wks, Prevena 7d battery" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500">
     </div>
@@ -250,7 +262,7 @@
     <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4">
       <div class="flex justify-between items-center mb-2">
         <label class="text-[10px] text-slate-400 font-semibold tracking-wider uppercase">Dictation & Clinical Notes</label>
-        <span class="text-[10px] text-purple-400 font-medium">Gemini 2.5 Flash Connected</span>
+        <span class="text-[10px] text-purple-400 font-medium">Direct Gemini 2.5 Flash</span>
       </div>
       <textarea id="dictationBox" oninput="autoSaveCurrentEncounter(); assembleNote();" rows="3" placeholder="Dictate clinical specifics, exam nuances, or implant serials using Gboard mic..." class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-blue-500 no-scrollbar"></textarea>
       
@@ -280,13 +292,71 @@
         <button onclick="shareToKeep()" class="py-2.5 rounded-xl bg-amber-600/20 border border-amber-500/40 text-xs font-semibold text-amber-300 active:bg-amber-600/30">
           Export Keep
         </button>
-        <button onclick="logToRegistry()" id="logRegistryBtn" class="py-2.5 rounded-xl bg-blue-600 border border-blue-500 text-xs font-semibold text-white active:bg-blue-700">
-          Log Case
+        <button onclick="logToLocalRegistry()" id="logRegistryBtn" class="py-2.5 rounded-xl bg-blue-600 border border-blue-500 text-xs font-semibold text-white active:bg-blue-700">
+          Log Case to DB
         </button>
       </div>
     </div>
 
   </main>
+
+  <!-- ================= GEMINI API KEY SETTINGS MODAL ================= -->
+  <div id="apiKeyModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex flex-col justify-end p-0 sm:p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-2xl max-w-2xl w-full mx-auto p-5 flex flex-col">
+      <div class="flex justify-between items-center mb-3">
+        <div>
+          <h2 class="text-sm font-bold text-white uppercase tracking-wider">Gemini AI Engine Settings</h2>
+          <p class="text-[11px] text-slate-400">Stored locally on your Pixel 9 Pro (never uploaded to GitHub)</p>
+        </div>
+        <button onclick="toggleApiKeyModal()" class="w-8 h-8 rounded-full bg-slate-800 text-slate-300 flex items-center justify-center font-bold">✕</button>
+      </div>
+
+      <div class="flex flex-col gap-3 mb-4">
+        <div>
+          <label class="text-[10px] text-slate-400 font-medium block mb-1">Google AI Studio Gemini API Key</label>
+          <input id="geminiApiKeyInput" type="password" placeholder="Paste your AIzaSy... or AQ... key here" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-purple-500">
+        </div>
+        <p id="apiKeyTestResult" class="text-xs text-slate-400 min-h-[16px]"></p>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2">
+        <button onclick="saveAndTestGeminiKey()" id="saveApiKeyBtn" class="py-2.5 rounded-xl bg-purple-600 border border-purple-500 text-xs font-semibold text-white active:bg-purple-700">
+          Save & Verify Key
+        </button>
+        <button onclick="toggleApiKeyModal()" class="py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-xs font-semibold text-slate-300 active:bg-slate-700">
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= IN-APP SURGICAL CASE REGISTRY MODAL ================= -->
+  <div id="registryModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex flex-col justify-end p-0 sm:p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-2xl max-w-2xl w-full mx-auto p-5 flex flex-col max-h-[88vh]">
+      <div class="flex justify-between items-center mb-3">
+        <div>
+          <h2 class="text-sm font-bold text-white uppercase tracking-wider">Surgical Case Database</h2>
+          <p class="text-[11px] text-slate-400">On-Device Registry (<span id="modalRegistryTotal">0</span> Cases Logged)</p>
+        </div>
+        <button onclick="toggleRegistryModal()" class="w-8 h-8 rounded-full bg-slate-800 text-slate-300 flex items-center justify-center font-bold">✕</button>
+      </div>
+
+      <input id="registrySearchInput" oninput="renderRegistryModalList()" type="text" placeholder="Search by patient name, procedure, or implant..." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white mb-3 focus:outline-none focus:border-blue-500">
+
+      <div id="registryCasesContainer" class="flex-1 overflow-y-auto flex flex-col gap-2 mb-4 no-scrollbar">
+        <!-- Populated from localStorage -->
+      </div>
+
+      <div class="grid grid-cols-2 gap-2">
+        <button onclick="exportRegistryCSV()" class="py-2.5 rounded-xl bg-emerald-600/20 border border-emerald-500/40 text-xs font-semibold text-emerald-300 active:bg-emerald-600/30">
+          Export CSV (Excel Caselog)
+        </button>
+        <button onclick="toggleRegistryModal()" class="py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-xs font-semibold text-slate-300 active:bg-slate-700">
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
 
   <!-- ================= IN-APP TEMPLATE STUDIO MODAL ================= -->
   <div id="templateStudioModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex flex-col justify-end p-0 sm:p-4">
@@ -380,7 +450,6 @@ NOTES:
 
   <!-- ================= RUNTIME LOGIC & ARCHITECTURE ================= -->
   <script>
-    const WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbzPj4MzgdXBoQOBssuKq1lxuYhKFvPbwJSWsVunCyKnN_a_6uNNzIhL7ECDTM3yXgFU4A/exec";
     const APP_PIN = "011616";
     let enteredPin = "";
     let currentClosure = "default";
@@ -462,6 +531,309 @@ NOTES:
       enteredPin = "";
       updateDots();
       clearTimeout(inactivityTimer);
+    }
+
+    // --- Direct Gemini API Key Manager (Local Storage Only) ---
+    function getGeminiApiKey() {
+      return localStorage.getItem("orthoflow_gemini_api_key") || "";
+    }
+
+    function updateApiKeyBadge() {
+      const btn = document.getElementById("apiKeyStatusBtn");
+      if (getGeminiApiKey()) {
+        btn.innerText = "AI Ready ✓";
+        btn.className = "px-2 py-1 rounded-lg bg-purple-600/30 border border-purple-500/60 text-[11px] text-purple-200 font-medium";
+      } else {
+        btn.innerText = "Set AI Key";
+        btn.className = "px-2 py-1 rounded-lg bg-amber-600/20 border border-amber-500/50 text-[11px] text-amber-300 font-medium";
+      }
+    }
+
+    function toggleApiKeyModal() {
+      const modal = document.getElementById("apiKeyModal");
+      modal.classList.toggle("hidden");
+      if (!modal.classList.contains("hidden")) {
+        document.getElementById("geminiApiKeyInput").value = getGeminiApiKey();
+        document.getElementById("apiKeyTestResult").innerText = "";
+      }
+    }
+
+    async function callGeminiDirect(partsArray, requireJson = true) {
+      const apiKey = getGeminiApiKey().trim();
+      if (!apiKey) {
+        toggleApiKeyModal();
+        throw new Error("Please enter your Gemini API key first.");
+      }
+
+      const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
+      const bodyObj = {
+        contents: [{ parts: partsArray }]
+      };
+      if (requireJson) {
+        bodyObj.generationConfig = { responseMimeType: "application/json" };
+      }
+
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": apiKey
+        },
+        body: JSON.stringify(bodyObj)
+      });
+
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        throw new Error(data.error ? data.error.message : `HTTP ${res.status}`);
+      }
+      return data.candidates[0].content.parts[0].text;
+    }
+
+    async function saveAndTestGeminiKey() {
+      const val = document.getElementById("geminiApiKeyInput").value.trim();
+      const statusEl = document.getElementById("apiKeyTestResult");
+      const btn = document.getElementById("saveApiKeyBtn");
+
+      if (!val) {
+        alert("Paste your Gemini API key first.");
+        return;
+      }
+
+      localStorage.setItem("orthoflow_gemini_api_key", val);
+      updateApiKeyBadge();
+      btn.innerText = "Verifying...";
+      btn.disabled = true;
+      statusEl.className = "text-xs text-blue-400";
+      statusEl.innerText = "Testing direct connection to Gemini 2.5 Flash...";
+
+      try {
+        const reply = await callGeminiDirect([{ text: "Reply with the single word: CONNECTED" }], false);
+        statusEl.className = "text-xs text-emerald-400 font-semibold";
+        statusEl.innerText = `Success: ${reply.trim()} ✓`;
+        setTimeout(() => {
+          btn.innerText = "Save & Verify Key";
+          btn.disabled = false;
+        }, 1200);
+      } catch (err) {
+        statusEl.className = "text-xs text-red-400 font-medium";
+        statusEl.innerText = `Key Error: ${err.message}`;
+        btn.innerText = "Save & Verify Key";
+        btn.disabled = false;
+      }
+    }
+
+    // --- In-App Surgical Case Registry (Local Database + CSV Export) ---
+    function getSurgicalCases() {
+      const stored = localStorage.getItem("orthoflow_surgical_cases");
+      return stored ? JSON.parse(stored) : [];
+    }
+
+    function saveSurgicalCases(cases) {
+      localStorage.setItem("orthoflow_surgical_cases", JSON.stringify(cases));
+      document.getElementById("registryCount").innerText = cases.length;
+    }
+
+    function findCaseInLocalRegistry(nameQuery) {
+      const q = (nameQuery || "").toLowerCase().trim();
+      if (!q) return null;
+      const cases = getSurgicalCases();
+      for (let i = cases.length - 1; i >= 0; i--) {
+        const pt = (cases[i].patientName || "").toLowerCase().trim();
+        if (pt && (pt.includes(q) || q.includes(pt))) {
+          return cases[i];
+        }
+      }
+      return null;
+    }
+
+    function logToLocalRegistry() {
+      const btn = document.getElementById("logRegistryBtn");
+      const ptName = document.getElementById("ptName").value.trim();
+
+      if (!ptName) {
+        alert("Enter patient name before logging case to database.");
+        return;
+      }
+
+      const type = document.getElementById("templateSelect").value;
+      const tmplSelect = document.getElementById("templateSelect");
+      let procName = tmplSelect.options[tmplSelect.selectedIndex].text.split("(")[0].trim();
+      let approach = "Standard";
+
+      if (type.startsWith("custom_")) {
+        procName = document.getElementById("opCustomTitle") ? document.getElementById("opCustomTitle").value : procName;
+        approach = document.getElementById("opCustomApp") ? document.getElementById("opCustomApp").value : "Standard";
+      } else if (type === "op_da_tha") {
+        procName = "Direct Anterior Total Hip Arthroplasty";
+        approach = document.getElementById("opDaInc") ? document.getElementById("opDaInc").value : "Direct Anterior";
+      } else if (type === "op_primary_tka") {
+        procName = "Primary Total Knee Arthroplasty";
+        approach = "Medial Parapatellar";
+      } else if (type === "op_hip_hemi") {
+        procName = "Bipolar Hip Hemiarthroplasty";
+        approach = document.getElementById("opHemiApp") ? document.getElementById("opHemiApp").value : "Direct Anterior";
+      } else if (type === "op_rev_tka") {
+        procName = "Revision TKA - Isolated Liner Exchange";
+        approach = "Medial Parapatellar";
+      } else if (type === "op_lat_plateau") {
+        procName = "Lateral Tibial Plateau ORIF";
+        approach = "Anterolateral";
+      } else if (type === "op_med_plateau") {
+        procName = "Medial Tibial Plateau ORIF";
+        approach = "Posteromedial";
+      } else if (type === "op_bicondylar_plateau") {
+        procName = "Bicondylar Tibial Plateau ORIF";
+        approach = "Dual Incision";
+      } else if (type === "op_clavicle") {
+        procName = "Clavicle Shaft ORIF";
+        approach = "Superior / Anteroinferior";
+      }
+
+      const latEl = document.getElementById("lat");
+      const newCase = {
+        id: "case_" + Date.now(),
+        dos: new Date().toLocaleDateString(),
+        facility: "Dwight D. Eisenhower Army Medical Center",
+        patientName: ptName,
+        ageGender: document.getElementById("ptAgeGender").value || "Adult",
+        procedure: procName,
+        laterality: latEl ? latEl.value : "Operative",
+        approach: approach,
+        implants: document.getElementById("opImplants") ? document.getElementById("opImplants").value : "Documented",
+        closure: getClosureText(),
+        ebl: document.getElementById("opEbl") ? document.getElementById("opEbl").value : "100 cc",
+        postOpInstructions: document.getElementById("postOpInstructions").value || "Routine postoperative protocol."
+      };
+
+      const cases = getSurgicalCases();
+      cases.push(newCase);
+      saveSurgicalCases(cases);
+
+      btn.innerText = "Saved to DB ✓";
+      btn.classList.remove("bg-blue-600");
+      btn.classList.add("bg-emerald-600");
+      setTimeout(() => {
+        btn.innerText = "Log Case to DB";
+        btn.classList.remove("bg-emerald-600");
+        btn.classList.add("bg-blue-600");
+      }, 1800);
+    }
+
+    function toggleRegistryModal() {
+      const modal = document.getElementById("registryModal");
+      modal.classList.toggle("hidden");
+      if (!modal.classList.contains("hidden")) {
+        renderRegistryModalList();
+      }
+    }
+
+    function renderRegistryModalList() {
+      const cases = getSurgicalCases();
+      const query = (document.getElementById("registrySearchInput").value || "").toLowerCase().trim();
+      document.getElementById("modalRegistryTotal").innerText = cases.length;
+
+      const filtered = cases.filter(c =>
+        !query ||
+        (c.patientName || "").toLowerCase().includes(query) ||
+        (c.procedure || "").toLowerCase().includes(query) ||
+        (c.implants || "").toLowerCase().includes(query)
+      ).reverse();
+
+      const container = document.getElementById("registryCasesContainer");
+      if (filtered.length === 0) {
+        container.innerHTML = `<div class="text-center py-6 text-xs text-slate-500">No surgical cases logged in on-device database yet.</div>`;
+        return;
+      }
+
+      container.innerHTML = filtered.map(c => `
+        <div class="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-start justify-between gap-2">
+          <div class="min-w-0">
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-bold text-white">${c.patientName}</span>
+              <span class="text-[10px] text-slate-400 font-mono">${c.ageGender}</span>
+              <span class="text-[10px] text-blue-400 font-mono">${c.dos}</span>
+            </div>
+            <p class="text-xs text-emerald-400 font-medium mt-0.5">${c.procedure}</p>
+            <p class="text-[11px] text-slate-400 mt-0.5">${c.implants}</p>
+            <p class="text-[11px] text-amber-300/90 mt-0.5">Plan: ${c.postOpInstructions}</p>
+          </div>
+          <button onclick="deleteSurgicalCase('${c.id}')" class="text-slate-500 hover:text-red-400 text-xs p-1">✕</button>
+        </div>
+      `).join("");
+    }
+
+    function deleteSurgicalCase(caseId) {
+      if (!confirm("Remove this case from your on-device surgical database?")) return;
+      const updated = getSurgicalCases().filter(c => c.id !== caseId);
+      saveSurgicalCases(updated);
+      renderRegistryModalList();
+    }
+
+    function exportRegistryCSV() {
+      const cases = getSurgicalCases();
+      if (cases.length === 0) {
+        alert("No cases logged yet to export.");
+        return;
+      }
+      const headers = ["DOS", "Facility", "Patient", "Age_Gender", "Procedure", "Laterality", "Approach", "Implants", "EBL", "Precautions"];
+      const rows = cases.map(c => [
+        c.dos, c.facility, c.patientName, c.ageGender, c.procedure, c.laterality, c.approach, c.implants, c.ebl, c.postOpInstructions
+      ].map(val => `"${String(val || "").replace(/"/g, '""')}"`).join(","));
+
+      const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows].join("\n");
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", `OrthoFlow_Caselog_${new Date().toISOString().split('T')[0]}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    // --- Local Post-Op Matchmaker ---
+    function lookupPatient() {
+      const name = document.getElementById("ptName").value.trim();
+      const alertBox = document.getElementById("matchAlert");
+      if (!name) return;
+
+      const found = findCaseInLocalRegistry(name);
+      if (found) {
+        matchedCaseData = found;
+        document.getElementById("templateSelect").value = "postop";
+        const badge = document.getElementById("autoRoutedBadge");
+        badge.innerText = "Case DB Matched: Post-Op";
+        badge.classList.remove("hidden");
+        renderTemplateFields();
+
+        if (found.postOpInstructions) {
+          document.getElementById("postOpInstructions").value = found.postOpInstructions;
+        }
+
+        const isNonRoutine = found.postOpInstructions &&
+          !found.postOpInstructions.toLowerCase().includes("routine") &&
+          found.postOpInstructions.length > 5;
+
+        alertBox.className = isNonRoutine
+          ? "mt-3 p-3 rounded-xl border border-amber-500/50 bg-amber-950/30 text-amber-300"
+          : "mt-3 p-3 rounded-xl border border-emerald-500/50 bg-emerald-950/30 text-emerald-300";
+
+        alertBox.innerHTML = `
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-xs font-bold uppercase tracking-wider">Verified Case DB Post-Op</span>
+            <span class="text-[11px] font-mono">DOS: ${found.dos || 'Recent'}</span>
+          </div>
+          <p class="text-xs text-slate-200">s/p ${found.procedure || 'Procedure'}</p>
+          <p class="text-[11px] text-slate-400">Implants: ${found.implants || 'Documented in OR note'}</p>
+          ${isNonRoutine ? `<div class="mt-2 text-xs font-semibold text-amber-400 bg-amber-900/40 p-2 rounded-lg border border-amber-600/40">⚠ PROTOCOL ALERT: ${found.postOpInstructions}</div>` : ''}
+        `;
+        alertBox.classList.remove("hidden");
+        autoSaveCurrentEncounter();
+        assembleNote();
+      } else {
+        alertBox.className = "mt-3 p-3 rounded-xl border border-slate-800 bg-slate-950 text-slate-400 text-xs";
+        alertBox.innerText = "No prior surgical case found in local database for this patient.";
+        alertBox.classList.remove("hidden");
+      }
     }
 
     // --- Custom Template Manager ---
@@ -607,7 +979,7 @@ NOTES:
 
       activeEncounterId = enc.id;
       activeEncounterStage = enc.stage || "Pre-Visit";
-      matchedCaseData = enc.matchedCaseData || null;
+      matchedCaseData = enc.matchedCaseData || findCaseInLocalRegistry(enc.name);
 
       document.getElementById("ptName").value = enc.name;
       document.getElementById("ptAgeGender").value = enc.ageGender;
@@ -621,14 +993,14 @@ NOTES:
       renderTemplateFields();
 
       const alertBox = document.getElementById("matchAlert");
-      if (matchedCaseData && matchedCaseData.found) {
+      if (matchedCaseData) {
         alertBox.className = "mt-3 p-3 rounded-xl border border-emerald-500/50 bg-emerald-950/30 text-emerald-300";
         alertBox.innerHTML = `
           <div class="flex items-center justify-between mb-1">
-            <span class="text-xs font-bold uppercase tracking-wider">Verified Registry Post-Op</span>
+            <span class="text-xs font-bold uppercase tracking-wider">Verified Case DB Post-Op</span>
             <span class="text-[11px] font-mono">DOS: ${matchedCaseData.dos || 'Recent'}</span>
           </div>
-          <p class="text-xs text-slate-200">s/p ${matchedCaseData.laterality || ''} ${matchedCaseData.procedure || 'Procedure'}</p>
+          <p class="text-xs text-slate-200">s/p ${matchedCaseData.procedure || 'Procedure'}</p>
           <p class="text-[11px] text-slate-400">Implants: ${matchedCaseData.implants || 'Documented in OR note'}</p>
         `;
         alertBox.classList.remove("hidden");
@@ -659,7 +1031,7 @@ NOTES:
 
       const cardsContainer = document.getElementById("encounterCardsList");
       if (encounters.length === 0) {
-        cardsContainer.innerHTML = `<div class="text-center py-4 text-xs text-slate-500 bg-slate-950/60 rounded-xl border border-dashed border-slate-800">No encounters queued for ${currentClinicDate}. Upload schedule photos above.</div>`;
+        cardsContainer.innerHTML = `<div class="text-center py-4 text-xs text-slate-500 bg-slate-950/60 rounded-xl border border-dashed border-slate-800">No encounters queued for ${currentClinicDate}. Tap Camera or Gallery above.</div>`;
       } else {
         cardsContainer.innerHTML = encounters.map((enc, idx) => {
           const isSelected = enc.id === activeEncounterId;
@@ -682,7 +1054,6 @@ NOTES:
         }).join("");
       }
 
-      // Build Plain-Text 1-Liner Roster
       let listText = `CLINIC SCREENING ROSTER - ${currentClinicDate}\n`;
       listText += `PROVIDER: Dr. Spencer Schulte, MD | DDEAMC\n`;
       listText += `------------------------------------------------------------\n`;
@@ -731,7 +1102,7 @@ NOTES:
       }
     }
 
-    // --- Multi-Photo Schedule Extractor (Gemini Vision via Apps Script) ---
+    // --- Direct Gemini Vision Schedule Photo Extractor (Auto-Routes by Detected Date) ---
     async function processSchedulePhotos(input) {
       if (!input.files || input.files.length === 0) return;
       const files = Array.from(input.files);
@@ -743,42 +1114,53 @@ NOTES:
 
       progressBox.classList.remove("hidden");
       let totalAdded = 0;
+      let lastDetectedDate = currentClinicDate;
+
+      const prompt = `You are an orthopedic clinic schedule parser. Analyze this clinic schedule or face sheet image.
+Extract:
+1. "clinicDate": The appointment date shown on the schedule in strict "YYYY-MM-DD" format (e.g., "2026-11-17"). If no year is shown, assume 2026. If no date is visible at all, return null.
+2. "patients": An array of EVERY distinct patient encounter visible in the image. Each object must have:
+   - "name": string ("Last, First")
+   - "ageGender": string (e.g. "64M", "71F", or "Adult" if not visible)
+   - "apptTime": string (e.g. "08:30", or "")
+   - "visitReason": string (chief complaint, referral reason, or post-op note visible on schedule)
+   - "predictedModule": one of ["postop", "new_hip", "new_knee", "painful_joint", "telehealth", "sports", "hip_fx", "gen_fx"] based on the visit reason.
+
+Return ONLY valid JSON matching: { "clinicDate": "YYYY-MM-DD" | null, "patients": [...] }`;
 
       try {
         for (let i = 0; i < files.length; i++) {
           const pct = Math.round(((i + 0.3) / files.length) * 100);
           progressBar.style.width = `${pct}%`;
           percentText.innerText = `${pct}%`;
-          statusText.innerText = `Extracting schedule photo ${i + 1} of ${files.length}...`;
+          statusText.innerText = `Scanning photo ${i + 1} of ${files.length} with Gemini...`;
 
           const resizedDataUrl = await resizeImageForVision(files[i], 1400);
+          const cleanBase64 = resizedDataUrl.replace(/^data:image\/\w+;base64,/, "");
 
-          const res = await fetch(WEBHOOK_URL, {
-            method: "POST",
-            body: JSON.stringify({
-              action: "parse_schedule_image",
-              imageBase64: resizedDataUrl
-            })
-          });
+          const rawJsonStr = await callGeminiDirect([
+            { text: prompt },
+            { inlineData: { mimeType: "image/jpeg", data: cleanBase64 } }
+          ], true);
 
-          const extractedPatients = await res.json();
+          const result = JSON.parse(rawJsonStr);
+          const targetDate = (result.clinicDate && /^\d{4}-\d{2}-\d{2}$/.test(result.clinicDate))
+            ? result.clinicDate
+            : currentClinicDate;
+          lastDetectedDate = targetDate;
 
-          if (Array.isArray(extractedPatients)) {
-            const existingEncounters = getClinicEncounters(currentClinicDate);
+          const extractedPatients = Array.isArray(result) ? result : (result.patients || []);
+
+          if (extractedPatients.length > 0) {
+            const existingEncounters = getClinicEncounters(targetDate);
 
             for (const pt of extractedPatients) {
               if (!pt.name) continue;
-              // Skip if patient already exists on this clinic date
               const alreadyExists = existingEncounters.some(e => e.name.toLowerCase() === pt.name.toLowerCase());
               if (alreadyExists) continue;
 
-              // Check surgical registry automatically for post-op linking
-              let registryMatch = null;
-              try {
-                const regRes = await fetch(`${WEBHOOK_URL}?name=${encodeURIComponent(pt.name)}`);
-                const regData = await regRes.json();
-                if (regData && regData.found) registryMatch = regData;
-              } catch (e) {}
+              // Instant 0ms lookup against on-device surgical case database
+              const registryMatch = findCaseInLocalRegistry(pt.name);
 
               const isPostOp = registryMatch !== null || pt.predictedModule === "postop";
               const resolvedModule = isPostOp ? "postop" : (pt.predictedModule || "new_hip");
@@ -805,25 +1187,32 @@ NOTES:
               totalAdded++;
             }
 
-            saveClinicEncounters(currentClinicDate, existingEncounters);
+            localStorage.setItem(`orthoflow_encounters_${targetDate}`, JSON.stringify(existingEncounters));
           }
         }
 
+        currentClinicDate = lastDetectedDate;
+        document.getElementById("clinicDatePicker").value = currentClinicDate;
+        activeEncounterId = null;
+        renderClinicRosterUI();
+
         progressBar.style.width = "100%";
         percentText.innerText = "100%";
-        statusText.innerText = `Added ${totalAdded} encounters to ${currentClinicDate} ✓`;
+        statusText.innerText = totalAdded > 0
+          ? `Added ${totalAdded} encounters to ${currentClinicDate} ✓`
+          : `No new patients detected on ${currentClinicDate}.`;
 
-        // Auto-load the first encounter into the workspace
         const updatedList = getClinicEncounters(currentClinicDate);
         if (updatedList.length > 0 && !activeEncounterId) {
           loadEncounterIntoWorkspace(updatedList[0].id);
         }
 
-        setTimeout(() => { progressBox.classList.add("hidden"); }, 2500);
+        setTimeout(() => { progressBox.classList.add("hidden"); }, 3000);
       } catch (err) {
         console.error(err);
-        statusText.innerText = "Error parsing schedule image. Check Apps Script deployment.";
-        setTimeout(() => { progressBox.classList.add("hidden"); }, 3500);
+        statusText.innerText = `Error: ${err.message}`;
+        alert(`Schedule Scan Error:\n${err.message}`);
+        setTimeout(() => { progressBox.classList.add("hidden"); }, 4500);
       } finally {
         input.value = "";
       }
@@ -856,20 +1245,7 @@ NOTES:
       });
     }
 
-    window.addEventListener("DOMContentLoaded", () => {
-      initKeypad();
-      document.getElementById("clinicDatePicker").value = currentClinicDate;
-      loadCustomTemplatesIntoDropdown();
-      renderClinicRosterUI();
-
-      if (sessionStorage.getItem("orthoflow_unlocked") === "true") {
-        document.getElementById("pinScreen").classList.add("hidden");
-        resetInactivityTimer();
-      }
-      renderTemplateFields();
-    });
-
-    // --- Gemini AI Dictation Parser ---
+    // --- Direct Gemini AI Dictation Parser ---
     async function parseDictationWithAI() {
       const dictationText = document.getElementById("dictationBox").value.trim();
       if (!dictationText) {
@@ -881,16 +1257,28 @@ NOTES:
       btn.innerText = "Parsing with AI...";
       btn.disabled = true;
 
+      const moduleType = document.getElementById("templateSelect").value;
+      const prompt = `You are an expert orthopedic surgical and clinical documentation assistant.
+Extract structured clinical parameters from this raw physician dictation and return ONLY a valid JSON object matching this schema.
+
+Target Encounter Module: "${moduleType}"
+
+JSON schema keys:
+- "patientName": string or null
+- "ageGender": string or null (e.g. "64M")
+- "laterality": "Right", "Left", or "Bilateral" (or null)
+- "ebl": string (e.g. "50 cc", "100 cc")
+- "implants": string (concise specs of implants, sizes, offsets, polyethylene thickness, plates, screws)
+- "closure": "default", "prineo", or "prevena" (choose "prevena" if negative pressure mentioned; "prineo" if mesh/glue; "default" if Sylke/Aquacel or routine)
+- "postOpInstructions": string (WB status, brace settings, precautions, medications)
+- "remainingNotes": string (narrative context, procedural nuances, complications, or findings not covered above)
+
+Dictation:
+"""${dictationText}"""`;
+
       try {
-        const res = await fetch(WEBHOOK_URL, {
-          method: "POST",
-          body: JSON.stringify({
-            action: "parse_dictation",
-            transcript: dictationText,
-            moduleType: document.getElementById("templateSelect").value
-          })
-        });
-        const parsed = await res.json();
+        const rawJsonStr = await callGeminiDirect([{ text: prompt }], true);
+        const parsed = JSON.parse(rawJsonStr);
 
         if (parsed.patientName && !document.getElementById("ptName").value) {
           document.getElementById("ptName").value = parsed.patientName;
@@ -911,11 +1299,26 @@ NOTES:
           btn.disabled = false;
         }, 2000);
       } catch (err) {
-        alert("Parsing failed. Check internet connection.");
+        alert(`AI Parse Error:\n${err.message}`);
         btn.innerHTML = `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg> AI Parse Dictation`;
         btn.disabled = false;
       }
     }
+
+    window.addEventListener("DOMContentLoaded", () => {
+      initKeypad();
+      document.getElementById("clinicDatePicker").value = currentClinicDate;
+      document.getElementById("registryCount").innerText = getSurgicalCases().length;
+      updateApiKeyBadge();
+      loadCustomTemplatesIntoDropdown();
+      renderClinicRosterUI();
+
+      if (sessionStorage.getItem("orthoflow_unlocked") === "true") {
+        document.getElementById("pinScreen").classList.add("hidden");
+        resetInactivityTimer();
+      }
+      renderTemplateFields();
+    });
 
     // --- Dynamic Wound Closure ---
     function setClosure(type) {
@@ -956,21 +1359,21 @@ NOTES:
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Procedure</label>
-              <input id="opCustomTitle" type="text" value="${customTmpl.title}" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <input id="opCustomTitle" oninput="assembleNote()" type="text" value="${customTmpl.title}" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
             </div>
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Implants Used</label>
-              <input id="opImplants" type="text" value="${customTmpl.implants || 'Documented'}" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <input id="opImplants" oninput="assembleNote()" type="text" value="${customTmpl.implants || 'Documented'}" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
             </div>
           </div>
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">EBL</label>
-              <input id="opEbl" type="text" value="100 cc" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <input id="opEbl" oninput="assembleNote()" type="text" value="100 cc" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
             </div>
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Approach</label>
-              <input id="opCustomApp" type="text" value="Standard surgical approach" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <input id="opCustomApp" oninput="assembleNote()" type="text" value="Standard surgical approach" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
             </div>
           </div>
         `;
@@ -1436,145 +1839,6 @@ NOTES:
       assembleNote();
     }
 
-    // --- Registry Lookup & Matchmaker ---
-    async function lookupPatient() {
-      const name = document.getElementById("ptName").value.trim();
-      if (!name) return;
-
-      const btn = document.getElementById("matchBtn");
-      const alertBox = document.getElementById("matchAlert");
-      btn.innerText = "Querying...";
-
-      try {
-        const response = await fetch(`${WEBHOOK_URL}?name=${encodeURIComponent(name)}`);
-        const data = await response.json();
-
-        if (data && data.found) {
-          matchedCaseData = data;
-          document.getElementById("templateSelect").value = "postop";
-          const badge = document.getElementById("autoRoutedBadge");
-          badge.innerText = "Registry Matched: Post-Op";
-          badge.classList.remove("hidden");
-          renderTemplateFields();
-
-          if (data.postOpInstructions) {
-            document.getElementById("postOpInstructions").value = data.postOpInstructions;
-          }
-
-          const isNonRoutine = data.postOpInstructions && 
-            !data.postOpInstructions.toLowerCase().includes("routine") &&
-            data.postOpInstructions.length > 5;
-
-          alertBox.className = isNonRoutine 
-            ? "mt-3 p-3 rounded-xl border border-amber-500/50 bg-amber-950/30 text-amber-300"
-            : "mt-3 p-3 rounded-xl border border-emerald-500/50 bg-emerald-950/30 text-emerald-300";
-
-          alertBox.innerHTML = `
-            <div class="flex items-center justify-between mb-1">
-              <span class="text-xs font-bold uppercase tracking-wider">Verified Registry Post-Op</span>
-              <span class="text-[11px] font-mono">DOS: ${data.dos || 'Recent'}</span>
-            </div>
-            <p class="text-xs text-slate-200">s/p ${data.laterality || ''} ${data.procedure || 'Procedure'}</p>
-            <p class="text-[11px] text-slate-400">Implants: ${data.implants || 'Documented in OR note'}</p>
-            ${isNonRoutine ? `<div class="mt-2 text-xs font-semibold text-amber-400 bg-amber-900/40 p-2 rounded-lg border border-amber-600/40">⚠ PROTOCOL ALERT: ${data.postOpInstructions}</div>` : ''}
-          `;
-          alertBox.classList.remove("hidden");
-          autoSaveCurrentEncounter();
-          assembleNote();
-        } else {
-          alertBox.className = "mt-3 p-3 rounded-xl border border-slate-800 bg-slate-950 text-slate-400 text-xs";
-          alertBox.innerText = "No prior surgical registry entry found for this patient.";
-          alertBox.classList.remove("hidden");
-        }
-      } catch (err) {
-      } finally {
-        btn.innerText = "Match Registry";
-      }
-    }
-
-    // --- Registry Post (doPost) ---
-    async function logToRegistry() {
-      const btn = document.getElementById("logRegistryBtn");
-      const ptName = document.getElementById("ptName").value.trim();
-
-      if (!ptName) {
-        alert("Enter patient name before logging to registry.");
-        return;
-      }
-
-      btn.innerText = "Logging...";
-      btn.disabled = true;
-
-      const type = document.getElementById("templateSelect").value;
-      let procName = type;
-      let approach = "Standard";
-
-      if (type.startsWith("custom_")) {
-        procName = document.getElementById("opCustomTitle") ? document.getElementById("opCustomTitle").value : "Custom Procedure";
-        approach = document.getElementById("opCustomApp") ? document.getElementById("opCustomApp").value : "Standard";
-      } else if (type === "op_da_tha") {
-        procName = "Direct Anterior Total Hip Arthroplasty";
-        approach = document.getElementById("opDaInc") ? document.getElementById("opDaInc").value : "Direct Anterior";
-      } else if (type === "op_primary_tka") {
-        procName = "Primary Total Knee Arthroplasty";
-        approach = "Medial Parapatellar";
-      } else if (type === "op_hip_hemi") {
-        procName = "Bipolar Hip Hemiarthroplasty";
-        approach = document.getElementById("opHemiApp") ? document.getElementById("opHemiApp").value : "Direct Anterior";
-      } else if (type === "op_rev_tka") {
-        procName = "Revision TKA - Isolated Liner Exchange";
-        approach = "Medial Parapatellar";
-      } else if (type === "op_lat_plateau") {
-        procName = "Lateral Tibial Plateau ORIF";
-        approach = "Anterolateral";
-      } else if (type === "op_med_plateau") {
-        procName = "Medial Tibial Plateau ORIF";
-        approach = "Posteromedial";
-      } else if (type === "op_bicondylar_plateau") {
-        procName = "Bicondylar Tibial Plateau ORIF";
-        approach = "Dual Incision (Anterolateral + Posteromedial)";
-      } else if (type === "op_clavicle") {
-        procName = "Clavicle Shaft ORIF";
-        approach = "Direct Superior / Anteroinferior";
-      }
-
-      const payload = {
-        dos: new Date().toLocaleDateString(),
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        patientName: ptName,
-        ageGender: document.getElementById("ptAgeGender").value || "Adult",
-        procedure: procName,
-        laterality: "Operative",
-        approach: approach,
-        implants: document.getElementById("opImplants") ? document.getElementById("opImplants").value : "Documented",
-        closure: getClosureText(),
-        ebl: document.getElementById("opEbl") ? document.getElementById("opEbl").value : "100 cc",
-        postOpInstructions: document.getElementById("postOpInstructions").value || "Routine postoperative protocol."
-      };
-
-      try {
-        await fetch(WEBHOOK_URL, {
-          method: "POST",
-          mode: "no-cors",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
-        btn.innerText = "Logged ✓";
-        btn.classList.remove("bg-blue-600");
-        btn.classList.add("bg-emerald-600");
-        setTimeout(() => {
-          btn.innerText = "Log Case";
-          btn.classList.remove("bg-emerald-600");
-          btn.classList.add("bg-blue-600");
-          btn.disabled = false;
-        }, 2000);
-      } catch (err) {
-        alert("Error submitting case to Google Sheets.");
-        btn.innerText = "Log Case";
-        btn.disabled = false;
-      }
-    }
-
     // --- Master Note Assembler ---
     function assembleNote() {
       const type = document.getElementById("templateSelect").value;
@@ -1622,11 +1886,11 @@ NOTES:
         note = `EVALUATION OF THE PAINFUL / FAILED TOTAL JOINT ARTHROPLASTY\nPATIENT: ${ptName} | DEMOGRAPHICS: ${ageGender}\nDATE: ${new Date().toLocaleDateString()}\nATTENDING SURGEON: Dr. Spencer Schulte, MD (Adult Reconstruction)\n\nSUBJECTIVE & INDEX HISTORY:\nEvaluation of painful ${joint}. Course: ${pfi}.\nInstability, startup discomfort, and functional decline evaluated. No acute bacteremia or wound breakdown reported.\n\nPERIPROSTHETIC JOINT INFECTION (PJI) EXCLUSION WORKUP:\n- Serum Biomarkers: ${labs}\n- Synovial Fluid Aspiration: ${asp}\n- Interpretation: Evaluated per ICM / MSIS diagnostic criteria.\n\nPLAN:\n1. Rule out indolent PJI pending complete synovial cultures.\n2. Surgical reconstruction pathway (isolated liner exchange vs revision arthroplasty) tailored to culture and mechanical findings.\n\nNOTES:\n${rawDictation || 'None.'}`;
       } else if (type === "postop") {
         const dos = matchedCaseData ? matchedCaseData.dos : "[DOS]";
-        const proc = matchedCaseData ? `${matchedCaseData.laterality || ''} ${matchedCaseData.procedure || 'Joint Arthroplasty'}` : "[Index Procedure]";
+        const proc = matchedCaseData ? `${matchedCaseData.procedure || 'Joint Arthroplasty'}` : "[Index Procedure]";
         const implants = matchedCaseData ? matchedCaseData.implants : "[Implant Construct]";
         const interval = document.getElementById("postopInterval") ? document.getElementById("postopInterval").value : "Follow-Up";
         const incEx = document.getElementById("postopIncision") ? document.getElementById("postopIncision").value : "Clean, dry, intact";
-        note = `POST-OPERATIVE CLINICAL SURVEILLANCE NOTE (${interval.toUpperCase()})\nPATIENT: ${ptName} | DEMOGRAPHICS: ${ageGender}\nDATE: ${new Date().toLocaleDateString()}\nATTENDING SURGEON: Dr. Spencer Schulte, MD (Adult Reconstruction)\nHOSPITAL: DDEAMC\n\nINDEX SURGICAL HISTORY (REGISTRY MATCHED):\nPatient presents for scheduled ${interval} evaluation s/p ${proc} performed on ${dos}.\nOperative Implants: ${implants}.\nIndex Closure: Incision closed with barbed Stratafix and protective surgical barrier.\n\nINTERVAL HISTORY & RECOVERY:\nPatient reports well-managed discomfort. Has adhered to postoperative mobilization milestones and chemoprophylaxis protocol. Tolerating prescribed physical therapy exercises.\n\nPHYSICAL EXAMINATION:\n- Surgical Incision: ${incEx}.\n- Active/Passive ROM: Progressing satisfactorily without guarded motion block.\n- Neurovascular & DVT Screen: Calves soft, nontender, negative Homan's. Distal pulses (DP/PT) 2+ and symmetric. Light touch sensation intact distally.\n\nOPERATIVE PROTOCOL VERIFICATION:\n- Logged Precautions: ${instructions}\n- Protocol Adherence: Confirmed compliant with weight bearing, movement precautions, or wound dressings.\n\nRADIOGRAPHIC ASSESSMENT:\nOrthogonal postoperative radiographs demonstrate anatomical component position, intact interface without radiolucencies, and no subsidence.\n\nASSESSMENT & PLAN:\n1. Satisfactory progress s/p ${proc}.\n2. Advance physical therapy and weight bearing as tolerated.\n3. Follow-up interval confirmed.\n\nADDITIONAL CLINICAL NOTES:\n${rawDictation || 'None.'}`;
+        note = `POST-OPERATIVE CLINICAL SURVEILLANCE NOTE (${interval.toUpperCase()})\nPATIENT: ${ptName} | DEMOGRAPHICS: ${ageGender}\nDATE: ${new Date().toLocaleDateString()}\nATTENDING SURGEON: Dr. Spencer Schulte, MD (Adult Reconstruction)\nHOSPITAL: DDEAMC\n\nINDEX SURGICAL HISTORY (CASE DB MATCHED):\nPatient presents for scheduled ${interval} evaluation s/p ${proc} performed on ${dos}.\nOperative Implants: ${implants}.\nIndex Closure: Incision closed with barbed Stratafix and protective surgical barrier.\n\nINTERVAL HISTORY & RECOVERY:\nPatient reports well-managed discomfort. Has adhered to postoperative mobilization milestones and chemoprophylaxis protocol. Tolerating prescribed physical therapy exercises.\n\nPHYSICAL EXAMINATION:\n- Surgical Incision: ${incEx}.\n- Active/Passive ROM: Progressing satisfactorily without guarded motion block.\n- Neurovascular & DVT Screen: Calves soft, nontender, negative Homan's. Distal pulses (DP/PT) 2+ and symmetric. Light touch sensation intact distally.\n\nOPERATIVE PROTOCOL VERIFICATION:\n- Logged Precautions: ${instructions}\n- Protocol Adherence: Confirmed compliant with weight bearing, movement precautions, or wound dressings.\n\nRADIOGRAPHIC ASSESSMENT:\nOrthogonal postoperative radiographs demonstrate anatomical component position, intact interface without radiolucencies, and no subsidence.\n\nASSESSMENT & PLAN:\n1. Satisfactory progress s/p ${proc}.\n2. Advance physical therapy and weight bearing as tolerated.\n3. Follow-up interval confirmed.\n\nADDITIONAL CLINICAL NOTES:\n${rawDictation || 'None.'}`;
       } else if (type === "sports") {
         const reg = document.getElementById("sportsRegion") ? document.getElementById("sportsRegion").value : "Knee";
         const mech = document.getElementById("sportsMech") ? document.getElementById("sportsMech").value : "Trauma";
