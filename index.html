@@ -262,7 +262,7 @@
     <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4">
       <div class="flex justify-between items-center mb-2">
         <label class="text-[10px] text-slate-400 font-semibold tracking-wider uppercase">Dictation & Clinical Notes</label>
-        <span class="text-[10px] text-purple-400 font-medium">Direct Gemini 2.5 Flash</span>
+        <span class="text-[10px] text-purple-400 font-medium">Direct Gemini 3.8 Flash</span>
       </div>
       <textarea id="dictationBox" oninput="autoSaveCurrentEncounter(); assembleNote();" rows="3" placeholder="Dictate clinical specifics, exam nuances, or implant serials using Gboard mic..." class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-blue-500 no-scrollbar"></textarea>
       
@@ -332,13 +332,47 @@
 
   <!-- ================= IN-APP SURGICAL CASE REGISTRY MODAL ================= -->
   <div id="registryModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex flex-col justify-end p-0 sm:p-4">
-    <div class="bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-2xl max-w-2xl w-full mx-auto p-5 flex flex-col max-h-[88vh]">
+    <div class="bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-2xl max-w-2xl w-full mx-auto p-5 flex flex-col max-h-[90vh]">
       <div class="flex justify-between items-center mb-3">
         <div>
           <h2 class="text-sm font-bold text-white uppercase tracking-wider">Surgical Case Database</h2>
           <p class="text-[11px] text-slate-400">On-Device Registry (<span id="modalRegistryTotal">0</span> Cases Logged)</p>
         </div>
         <button onclick="toggleRegistryModal()" class="w-8 h-8 rounded-full bg-slate-800 text-slate-300 flex items-center justify-center font-bold">✕</button>
+      </div>
+
+      <!-- Import Prior Caselog Bar -->
+      <div class="bg-slate-950 border border-slate-800 rounded-xl p-3 mb-3 flex flex-col gap-2">
+        <div class="flex items-center justify-between">
+          <div>
+            <span class="text-xs font-bold text-blue-400">Import Prior Caselog</span>
+            <p class="text-[10px] text-slate-400">Upload Excel-exported .CSV or add prior surgeries</p>
+          </div>
+          <div class="flex gap-1.5">
+            <label class="cursor-pointer px-2.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-semibold active:bg-blue-700">
+              Upload CSV
+              <input type="file" accept=".csv,text/csv" class="hidden" onchange="importRegistryCSVFile(this)">
+            </label>
+            <button type="button" onclick="toggleQuickAddCase()" class="px-2.5 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-[11px] font-semibold text-slate-200 active:bg-slate-700">
+              + Quick Add
+            </button>
+          </div>
+        </div>
+
+        <!-- Collapsible Quick Add Historical Case Drawer -->
+        <div id="quickAddCaseDrawer" class="hidden pt-2 border-t border-slate-800 flex flex-col gap-2">
+          <div class="grid grid-cols-3 gap-1.5">
+            <input id="manualCaseDos" type="text" placeholder="DOS (MM/DD/YYYY)" class="bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white">
+            <input id="manualCaseName" type="text" placeholder="Last, First" class="bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white">
+            <input id="manualCaseAgeSex" type="text" placeholder="Age/Sex (64M)" class="bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white">
+          </div>
+          <input id="manualCaseProc" type="text" placeholder="Procedure (e.g. Right Direct Anterior THA)" class="bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white">
+          <input id="manualCaseImplants" type="text" placeholder="Implants (Optional — e.g. Z1 Size 7, G7 54mm Cup)" class="bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white">
+          <input id="manualCasePlan" type="text" placeholder="Precautions / Notes (Optional)" class="bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white">
+          <button type="button" onclick="saveManualHistoricalCase()" class="py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold active:bg-emerald-700">
+            Save Prior Case to DB
+          </button>
+        </div>
       </div>
 
       <input id="registrySearchInput" oninput="renderRegistryModalList()" type="text" placeholder="Search by patient name, procedure, or implant..." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white mb-3 focus:outline-none focus:border-blue-500">
@@ -349,7 +383,7 @@
 
       <div class="grid grid-cols-2 gap-2">
         <button onclick="exportRegistryCSV()" class="py-2.5 rounded-xl bg-emerald-600/20 border border-emerald-500/40 text-xs font-semibold text-emerald-300 active:bg-emerald-600/30">
-          Export CSV (Excel Caselog)
+          Export CSV (Backup)
         </button>
         <button onclick="toggleRegistryModal()" class="py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-xs font-semibold text-slate-300 active:bg-slate-700">
           Close
@@ -558,14 +592,14 @@ NOTES:
       }
     }
 
-   async function callGeminiDirect(partsArray, requireJson = true) {
+    // --- Resilient Multi-Model Gemini Caller (Auto-Retry + Fallback Chain) ---
+    async function callGeminiDirect(partsArray, requireJson = true) {
       const apiKey = getGeminiApiKey().trim();
       if (!apiKey) {
         toggleApiKeyModal();
         throw new Error("Please enter your Gemini API key first.");
       }
 
-      // Automatic fallback chain if primary model hits temporary high-demand 503 spike
       const models = ["gemini-3.8-flash", "gemini-3.8-flash-lite", "gemini-3.5-flash", "gemini-3.8-pro"];
       const bodyObj = { contents: [{ parts: partsArray }] };
       if (requireJson) {
@@ -592,12 +626,11 @@ NOTES:
           }
 
           lastError = data.error ? data.error.message : `HTTP ${res.status}`;
-          // If 503 / high demand / overloaded, wait 1.2s and retry or move to next fallback model
           if (res.status === 503 || res.status === 429 || lastError.toLowerCase().includes("high demand")) {
             await new Promise(r => setTimeout(r, 1200));
             continue;
           } else {
-            break; // Non-transient error (e.g., deprecated model name), try next model immediately
+            break;
           }
         }
       }
@@ -620,7 +653,7 @@ NOTES:
       btn.innerText = "Verifying...";
       btn.disabled = true;
       statusEl.className = "text-xs text-blue-400";
-      statusEl.innerText = "Testing direct connection to Gemini 2.5 Flash...";
+      statusEl.innerText = "Testing direct connection to Gemini 3.8 Flash...";
 
       try {
         const reply = await callGeminiDirect([{ text: "Reply with the single word: CONNECTED" }], false);
@@ -638,7 +671,7 @@ NOTES:
       }
     }
 
-    // --- In-App Surgical Case Registry (Local Database + CSV Export) ---
+    // --- In-App Surgical Case Registry (Local Database + CSV Import/Export) ---
     function getSurgicalCases() {
       const stored = localStorage.getItem("orthoflow_surgical_cases");
       return stored ? JSON.parse(stored) : [];
@@ -649,13 +682,23 @@ NOTES:
       document.getElementById("registryCount").innerText = cases.length;
     }
 
+    // Token-based name matcher (matches "Last, First" and "First Last" seamlessly)
     function findCaseInLocalRegistry(nameQuery) {
-      const q = (nameQuery || "").toLowerCase().trim();
-      if (!q) return null;
+      const normalizeTokens = (str) => (str || "")
+        .toLowerCase()
+        .replace(/[^a-z\s]/g, " ")
+        .split(/\s+/)
+        .filter(t => t.length > 1);
+
+      const qTokens = normalizeTokens(nameQuery);
+      if (qTokens.length === 0) return null;
+
       const cases = getSurgicalCases();
       for (let i = cases.length - 1; i >= 0; i--) {
-        const pt = (cases[i].patientName || "").toLowerCase().trim();
-        if (pt && (pt.includes(q) || q.includes(pt))) {
+        const ptTokens = normalizeTokens(cases[i].patientName);
+        if (ptTokens.length === 0) continue;
+        const [shorter, longer] = qTokens.length <= ptTokens.length ? [qTokens, ptTokens] : [ptTokens, qTokens];
+        if (shorter.every(tok => longer.includes(tok))) {
           return cases[i];
         }
       }
@@ -709,7 +752,7 @@ NOTES:
       const newCase = {
         id: "case_" + Date.now(),
         dos: new Date().toLocaleDateString(),
-        facility: "Dwight D. Eisenhower Army Medical Center",
+        facility: "Eisenhower Army Medical Center",
         patientName: ptName,
         ageGender: document.getElementById("ptAgeGender").value || "Adult",
         procedure: procName,
@@ -757,7 +800,7 @@ NOTES:
 
       const container = document.getElementById("registryCasesContainer");
       if (filtered.length === 0) {
-        container.innerHTML = `<div class="text-center py-6 text-xs text-slate-500">No surgical cases logged in on-device database yet.</div>`;
+        container.innerHTML = `<div class="text-center py-6 text-xs text-slate-500">No surgical cases logged in on-device database yet. Upload your CSV caselog above or log an op note.</div>`;
         return;
       }
 
@@ -804,6 +847,139 @@ NOTES:
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+    }
+
+    function toggleQuickAddCase() {
+      document.getElementById("quickAddCaseDrawer").classList.toggle("hidden");
+    }
+
+    function saveManualHistoricalCase() {
+      const name = document.getElementById("manualCaseName").value.trim();
+      const proc = document.getElementById("manualCaseProc").value.trim();
+      if (!name || !proc) {
+        alert("Please enter at least Patient Name and Procedure.");
+        return;
+      }
+
+      const cases = getSurgicalCases();
+      cases.push({
+        id: "hist_" + Date.now(),
+        dos: document.getElementById("manualCaseDos").value.trim() || "Prior",
+        facility: "Eisenhower Army Medical Center",
+        patientName: name,
+        ageGender: document.getElementById("manualCaseAgeSex").value.trim() || "Adult",
+        procedure: proc,
+        laterality: "Operative",
+        approach: "Documented",
+        implants: document.getElementById("manualCaseImplants").value.trim() || "Documented in chart",
+        closure: "Documented",
+        ebl: "",
+        postOpInstructions: document.getElementById("manualCasePlan").value.trim() || "Routine postoperative protocol."
+      });
+
+      saveSurgicalCases(cases);
+      ["manualCaseDos", "manualCaseName", "manualCaseAgeSex", "manualCaseProc", "manualCaseImplants", "manualCasePlan"].forEach(id => {
+        document.getElementById(id).value = "";
+      });
+      renderRegistryModalList();
+    }
+
+    // Sparse-Safe CSV Importer (Handles incomplete Excel caselogs cleanly)
+    function importRegistryCSVFile(input) {
+      if (!input.files || !input.files[0]) return;
+      const file = input.files[0];
+      const reader = new FileReader();
+
+      reader.onload = function(e) {
+        try {
+          const text = e.target.result;
+          const lines = text.split(/\r?\n/).filter(line => line.trim().length > 0);
+          if (lines.length < 2) {
+            alert("CSV file appears empty or missing data rows.");
+            return;
+          }
+
+          const parseLine = (row) => {
+            const cols = [];
+            let cur = "", inQuotes = false;
+            for (let i = 0; i < row.length; i++) {
+              const ch = row[i];
+              if (ch === '"') {
+                if (inQuotes && row[i + 1] === '"') { cur += '"'; i++; }
+                else { inQuotes = !inQuotes; }
+              } else if (ch === ',' && !inQuotes) {
+                cols.push(cur.trim());
+                cur = "";
+              } else {
+                cur += ch;
+              }
+            }
+            cols.push(cur.trim());
+            return cols;
+          };
+
+          const headers = parseLine(lines[0]).map(h => h.toLowerCase());
+          const findCol = (keywords) => headers.findIndex(h => keywords.some(k => h.includes(k)));
+
+          const idxDos = findCol(["dos", "date", "surg"]);
+          const idxFacility = findCol(["facility", "hosp", "site", "location"]);
+          const idxName = findCol(["patient", "name", "pt"]);
+          const idxAgeSex = findCol(["age", "sex", "gender", "demo"]);
+          const idxProc = findCol(["proc", "operation", "surgery", "description", "cpt"]);
+          const idxLat = findCol(["lat", "side"]);
+          const idxApp = findCol(["approach"]);
+          const idxImplants = findCol(["implant", "hardware", "construct", "prosthesis"]);
+          const idxPrecautions = findCol(["precaution", "plan", "instruction", "note", "comment"]);
+
+          if (idxName === -1 || idxProc === -1) {
+            alert("Could not find 'Patient' and 'Procedure' columns in the CSV header row. Ensure your CSV has column headers named 'Patient' and 'Procedure'.");
+            return;
+          }
+
+          const existingCases = getSurgicalCases();
+          let addedCount = 0;
+
+          for (let r = 1; r < lines.length; r++) {
+            const cols = parseLine(lines[r]);
+            const ptName = cols[idxName] || "";
+            const proc = cols[idxProc] || "";
+            if (!ptName || !proc) continue;
+
+            const dos = idxDos >= 0 ? (cols[idxDos] || "") : "";
+            const isDup = existingCases.some(c =>
+              c.patientName.toLowerCase() === ptName.toLowerCase() &&
+              (c.dos || "") === dos
+            );
+            if (isDup) continue;
+
+            existingCases.push({
+              id: "csv_" + Date.now() + "_" + r,
+              dos: dos || "Historical",
+              facility: (idxFacility >= 0 && cols[idxFacility]) ? cols[idxFacility] : "Eisenhower Army Medical Center",
+              patientName: ptName,
+              ageGender: (idxAgeSex >= 0 && cols[idxAgeSex]) ? cols[idxAgeSex] : "Adult",
+              procedure: proc,
+              laterality: (idxLat >= 0 && cols[idxLat]) ? cols[idxLat] : "Operative",
+              approach: (idxApp >= 0 && cols[idxApp]) ? cols[idxApp] : "Documented",
+              implants: (idxImplants >= 0 && cols[idxImplants]) ? cols[idxImplants] : "Documented in chart",
+              closure: "Documented",
+              ebl: "",
+              postOpInstructions: (idxPrecautions >= 0 && cols[idxPrecautions]) ? cols[idxPrecautions] : "Routine postoperative protocol."
+            });
+            addedCount++;
+          }
+
+          saveSurgicalCases(existingCases);
+          renderRegistryModalList();
+          alert(`Imported ${addedCount} historical cases into your on-device database ✓`);
+        } catch (err) {
+          alert("Error reading CSV file: " + err.message);
+        } finally {
+          input.value = "";
+        }
+      };
+
+      reader.readAsText(file);
     }
 
     // --- Local Post-Op Matchmaker ---
@@ -1175,7 +1351,6 @@ Return ONLY valid JSON matching: { "clinicDate": "YYYY-MM-DD" | null, "patients"
               const alreadyExists = existingEncounters.some(e => e.name.toLowerCase() === pt.name.toLowerCase());
               if (alreadyExists) continue;
 
-              // Instant 0ms lookup against on-device surgical case database
               const registryMatch = findCaseInLocalRegistry(pt.name);
 
               const isPostOp = registryMatch !== null || pt.predictedModule === "postop";
@@ -1875,7 +2050,7 @@ Dictation:
           .replace(/{AGE_GENDER}/g, ageGender)
           .replace(/{DATE}/g, new Date().toLocaleDateString())
           .replace(/{SURGEON}/g, "Dr. Spencer Schulte, MD")
-          .replace(/{HOSPITAL}/g, "Dwight D. Eisenhower Army Medical Center (DDEAMC)")
+          .replace(/{HOSPITAL}/g, "Eisenhower Army Medical Center (DDEAMC)")
           .replace(/{EBL}/g, ebl)
           .replace(/{IMPLANTS}/g, implants)
           .replace(/{CLOSURE}/g, getClosureText())
@@ -1887,7 +2062,7 @@ Dictation:
         const eti = document.getElementById("etiology") ? document.getElementById("etiology").value : "Primary OA";
         const ir = document.getElementById("hipIR") ? document.getElementById("hipIR").value : "5°";
         const fc = document.getElementById("hipFC") ? document.getElementById("hipFC").value : "0°";
-        note = `ADULT RECONSTRUCTION CLINICAL CONSULTATION - NEW HIP\nPATIENT: ${ptName} | DEMOGRAPHICS: ${ageGender}\nDATE: ${new Date().toLocaleDateString()}\nATTENDING SURGEON: Dr. Spencer Schulte, MD (Adult Reconstruction)\nHOSPITAL: Dwight D. Eisenhower Army Medical Center (DDEAMC)\n\nSUBJECTIVE:\nPatient presents for evaluation of debilitating ${lat} hip pain secondary to ${eti}. Reports severe groin and startup discomfort, worsening with prolonged ambulation and limiting activities of daily living (difficulty donning shoes and socks). Exhausted conservative therapies including NSAIDs, activity modification, and PT.\n\nPHYSICAL EXAMINATION:\nGait: Antalgic gait favoring the ${lat} lower extremity.\n${lat} Hip Range of Motion:\n- Flexion: 100° with terminal discomfort.\n- Flexion Contracture: ${fc}.\n- Internal Rotation at 90°: ${ir} (severely restricted, reproduces groin pain).\n- Stinchfield Test: Positive. Log Roll: Positive groin discomfort.\n- Distal Neurovascular: DP and PT pulses 2+ and symmetric. Sensation intact in L2-S1 distributions.\n\nRADIOGRAPHIC ASSESSMENT:\nAP Pelvis, Cross-Table Lateral, Frog-Leg Lateral:\n- Marked joint space narrowing, dense subchondral sclerosis, osteophyte formation, and subchondral cyst change consistent with end-stage ${eti}.\n\nASSESSMENT & PLAN:\n1. End-stage degenerative joint disease of the ${lat} hip.\n2. Discussed conservative options vs surgical reconstruction.\n3. Patient elects to proceed with Direct Anterior Total Hip Arthroplasty (DA-THA). Reviewed muscle-sparing intermuscular interval, fluoroscopic guidance, rapid recovery, and risks (infection, periprosthetic fracture, dislocation, LFCN neuropraxia, DVT).\n4. Preoperative surgical clearance initiated.\n\nADDITIONAL CLINICAL NOTES:\n${rawDictation || 'None.'}`;
+        note = `ADULT RECONSTRUCTION CLINICAL CONSULTATION - NEW HIP\nPATIENT: ${ptName} | DEMOGRAPHICS: ${ageGender}\nDATE: ${new Date().toLocaleDateString()}\nATTENDING SURGEON: Dr. Spencer Schulte, MD (Adult Reconstruction)\nHOSPITAL: Eisenhower Army Medical Center (DDEAMC)\n\nSUBJECTIVE:\nPatient presents for evaluation of debilitating ${lat} hip pain secondary to ${eti}. Reports severe groin and startup discomfort, worsening with prolonged ambulation and limiting activities of daily living (difficulty donning shoes and socks). Exhausted conservative therapies including NSAIDs, activity modification, and PT.\n\nPHYSICAL EXAMINATION:\nGait: Antalgic gait favoring the ${lat} lower extremity.\n${lat} Hip Range of Motion:\n- Flexion: 100° with terminal discomfort.\n- Flexion Contracture: ${fc}.\n- Internal Rotation at 90°: ${ir} (severely restricted, reproduces groin pain).\n- Stinchfield Test: Positive. Log Roll: Positive groin discomfort.\n- Distal Neurovascular: DP and PT pulses 2+ and symmetric. Sensation intact in L2-S1 distributions.\n\nRADIOGRAPHIC ASSESSMENT:\nAP Pelvis, Cross-Table Lateral, Frog-Leg Lateral:\n- Marked joint space narrowing, dense subchondral sclerosis, osteophyte formation, and subchondral cyst change consistent with end-stage ${eti}.\n\nASSESSMENT & PLAN:\n1. End-stage degenerative joint disease of the ${lat} hip.\n2. Discussed conservative options vs surgical reconstruction.\n3. Patient elects to proceed with Direct Anterior Total Hip Arthroplasty (DA-THA). Reviewed muscle-sparing intermuscular interval, fluoroscopic guidance, rapid recovery, and risks (infection, periprosthetic fracture, dislocation, LFCN neuropraxia, DVT).\n4. Preoperative surgical clearance initiated.\n\nADDITIONAL CLINICAL NOTES:\n${rawDictation || 'None.'}`;
       } else if (type === "new_knee") {
         const lat = document.getElementById("lat") ? document.getElementById("lat").value : "Right";
         const comp = document.getElementById("kneeComp") ? document.getElementById("kneeComp").value : "Tricompartmental";
@@ -1934,7 +2109,7 @@ Dictation:
         const stem = document.getElementById("opDaStem") ? document.getElementById("opDaStem").value : "Z1";
         const implants = document.getElementById("opImplants") ? document.getElementById("opImplants").value : "Implants";
         const ebl = document.getElementById("opEbl") ? document.getElementById("opEbl").value : "100 cc";
-        note = `OPERATIVE REPORT\nPATIENT: ${ptName} | DEMOGRAPHICS: ${ageGender}\nDATE OF SURGERY: ${new Date().toLocaleDateString()}\nSURGEON: Dr. Spencer Schulte, MD\nHOSPITAL: Dwight D. Eisenhower Army Medical Center (DDEAMC)\n\nPROCEDURE PERFORMED: Direct Anterior Total Hip Arthroplasty (DA-THA)\nANESTHESIA: Spinal / General endotracheal\nESTIMATED BLOOD LOSS: ${ebl}\n\nIMPLANTS PLACED (Zimmer Biomet):\n${implants} (${stem})\n\nSURGICAL APPROACH & INCISION:\n${inc} incision. Dissection carried through tensor fascia lata intermuscular interval protecting LFCN branches. Exposure maintained with anterior retractor suite.\n\nWOUND CLOSURE:\n${getClosureText()}\n\nSPECIAL PRECAUTIONS & POSTOPERATIVE PLAN:\n${instructions}\n1. Weight bearing as tolerated.\n2. DVT chemoprophylaxis per protocol.\n\nADDITIONAL OPERATIVE DETAILS:\n${rawDictation || 'Routine course without complication.'}`;
+        note = `OPERATIVE REPORT\nPATIENT: ${ptName} | DEMOGRAPHICS: ${ageGender}\nDATE OF SURGERY: ${new Date().toLocaleDateString()}\nSURGEON: Dr. Spencer Schulte, MD\nHOSPITAL: Eisenhower Army Medical Center (DDEAMC)\n\nPROCEDURE PERFORMED: Direct Anterior Total Hip Arthroplasty (DA-THA)\nANESTHESIA: Spinal / General endotracheal\nESTIMATED BLOOD LOSS: ${ebl}\n\nIMPLANTS PLACED (Zimmer Biomet):\n${implants} (${stem})\n\nSURGICAL APPROACH & INCISION:\n${inc} incision. Dissection carried through tensor fascia lata intermuscular interval protecting LFCN branches. Exposure maintained with anterior retractor suite.\n\nWOUND CLOSURE:\n${getClosureText()}\n\nSPECIAL PRECAUTIONS & POSTOPERATIVE PLAN:\n${instructions}\n1. Weight bearing as tolerated.\n2. DVT chemoprophylaxis per protocol.\n\nADDITIONAL OPERATIVE DETAILS:\n${rawDictation || 'Routine course without complication.'}`;
       } else if (type === "op_primary_tka") {
         const constr = document.getElementById("opTkaConst") ? document.getElementById("opTkaConst").value : "Persona CR";
         const pat = document.getElementById("opTkaPatella") ? document.getElementById("opTkaPatella").value : "Resurfaced";
