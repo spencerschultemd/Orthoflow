@@ -558,35 +558,51 @@ NOTES:
       }
     }
 
-    async function callGeminiDirect(partsArray, requireJson = true) {
+   async function callGeminiDirect(partsArray, requireJson = true) {
       const apiKey = getGeminiApiKey().trim();
       if (!apiKey) {
         toggleApiKeyModal();
         throw new Error("Please enter your Gemini API key first.");
       }
 
-      const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent";
-      const bodyObj = {
-        contents: [{ parts: partsArray }]
-      };
+      // Automatic fallback chain if primary model hits temporary high-demand 503 spike
+      const models = ["gemini-3.8-flash", "gemini-3.8-flash-lite", "gemini-3.5-flash", "gemini-3.8-pro"];
+      const bodyObj = { contents: [{ parts: partsArray }] };
       if (requireJson) {
         bodyObj.generationConfig = { responseMimeType: "application/json" };
       }
 
-      const res = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-goog-api-key": apiKey
-        },
-        body: JSON.stringify(bodyObj)
-      });
+      let lastError = "Model unavailable";
 
-      const data = await res.json();
-      if (!res.ok || data.error) {
-        throw new Error(data.error ? data.error.message : `HTTP ${res.status}`);
+      for (const model of models) {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+        for (let attempt = 0; attempt < 2; attempt++) {
+          const res = await fetch(url, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-goog-api-key": apiKey
+            },
+            body: JSON.stringify(bodyObj)
+          });
+
+          const data = await res.json();
+          if (res.ok && !data.error) {
+            return data.candidates[0].content.parts[0].text;
+          }
+
+          lastError = data.error ? data.error.message : `HTTP ${res.status}`;
+          // If 503 / high demand / overloaded, wait 1.2s and retry or move to next fallback model
+          if (res.status === 503 || res.status === 429 || lastError.toLowerCase().includes("high demand")) {
+            await new Promise(r => setTimeout(r, 1200));
+            continue;
+          } else {
+            break; // Non-transient error (e.g., deprecated model name), try next model immediately
+          }
+        }
       }
-      return data.candidates[0].content.parts[0].text;
+
+      throw new Error(lastError);
     }
 
     async function saveAndTestGeminiKey() {
