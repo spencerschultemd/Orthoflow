@@ -891,7 +891,7 @@ NOTES:
       return out;
     }
 
-    // --- Keypad Initialization ---
+    // --- Keypad & Physical Keyboard Initialization ---
     function initKeypad() {
       document.querySelectorAll(".key-btn").forEach(btn => {
         btn.addEventListener("click", (e) => {
@@ -908,6 +908,29 @@ NOTES:
         e.preventDefault();
         enteredPin = enteredPin.slice(0, -1);
         updateDots();
+      });
+
+      // Physical laptop keyboard & numpad listener when PIN screen is active
+      window.addEventListener("keydown", (e) => {
+        const pinScreen = document.getElementById("pinScreen");
+        if (!pinScreen || pinScreen.classList.contains("hidden")) return;
+        if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+        if (/^[0-9]$/.test(e.key)) {
+          e.preventDefault();
+          handleDigit(e.key);
+        } else if (e.key === "Backspace" || e.key === "Delete") {
+          e.preventDefault();
+          enteredPin = enteredPin.slice(0, -1);
+          updateDots();
+        } else if (e.key === "Escape") {
+          e.preventDefault();
+          enteredPin = "";
+          updateDots();
+        } else if (e.key === "Enter" && enteredPin.length === 6) {
+          e.preventDefault();
+          verifyPin();
+        }
       });
     }
 
@@ -3559,8 +3582,9 @@ Extract and return ONLY valid JSON matching:
         wlAlert.classList.add("hidden");
       }
 
+      setManualNoteEditLock(false);
       autoSaveCurrentEncounter();
-      assembleNote();
+      assembleNote(true);
     }
 
     function buildDictationPrompt(dictationText, moduleType) {
@@ -3681,13 +3705,18 @@ Dictation:
       try {
         while (remaining.length > 0) {
           const job = remaining[0];
-          const prompt = buildDictationPrompt(job.dictationText, job.moduleType);
-          const rawJsonStr = await callGeminiDirect([{ text: prompt }], true);
+          const prompt = buildDictationPrompt(job.dictationText || "Transcribe this orthopedic audio recording and extract structured clinical parameters.", job.moduleType);
+          const parts = [{ text: prompt }];
+          if (job.audioBase64 && job.audioMimeType) {
+            parts.push({ inlineData: { mimeType: job.audioMimeType, data: job.audioBase64 } });
+          }
+          const rawJsonStr = await callGeminiDirect(parts, true);
           const parsed = safeParseJson(rawJsonStr, null);
           if (!parsed) throw new Error("Invalid JSON from Gemini during queue sync.");
 
           // If this job belongs to the currently open encounter on screen, update workspace live
           if (activeEncounterId === job.encounterId && currentClinicDate === job.clinicDate) {
+            setManualNoteEditLock(false);
             applyParsedDictationData(parsed);
           } else {
             // Otherwise, update the saved encounter in localStorage in the background
@@ -3752,6 +3781,7 @@ Dictation:
 
       const btn = document.getElementById("aiParseBtn");
       const moduleType = document.getElementById("templateSelect").value;
+      setManualNoteEditLock(false);
 
       // If browser already knows it's offline, immediately queue + run local parser without waiting
       if (!navigator.onLine) {
@@ -3800,14 +3830,15 @@ Dictation:
       }
     }
 
-    // --- Hands-Free Web Speech API Voice Dictation ---
+    // --- Hands-Free Web Speech API Voice Dictation (With Pause Auto-Restart) ---
     let speechRecognitionInstance = null;
     let isVoiceDictating = false;
+    let userStoppedVoiceDictation = false;
 
     function toggleVoiceDictation() {
       const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!SpeechRec) {
-        alert("Browser SpeechRecognition API is not supported in this browser. On Pixel 9 Pro, use Chrome or your Gboard microphone key.");
+        alert("Browser SpeechRecognition API is not supported in this browser. Use the 'Audio Memo -> AI' button next to it for direct Gemini voice transcription!");
         return;
       }
 
@@ -3815,10 +3846,13 @@ Dictation:
       const label = document.getElementById("voiceMicLabel");
 
       if (isVoiceDictating && speechRecognitionInstance) {
+        userStoppedVoiceDictation = true;
+        isVoiceDictating = false;
         speechRecognitionInstance.stop();
         return;
       }
 
+      userStoppedVoiceDictation = false;
       speechRecognitionInstance = new SpeechRec();
       speechRecognitionInstance.continuous = true;
       speechRecognitionInstance.interimResults = false;
@@ -3826,7 +3860,7 @@ Dictation:
 
       speechRecognitionInstance.onstart = () => {
         isVoiceDictating = true;
-        if (btn) btn.className = "px-2.5 py-1 rounded-lg bg-red-600/30 border border-red-500 text-[11px] font-semibold text-red-200 hover:bg-red-600/40 flex items-center gap-1 transition-all animate-pulse";
+        if (btn) btn.className = "px-2.5 py-1.5 rounded-xl bg-red-600/30 border border-red-500 text-xs font-semibold text-red-200 hover:bg-red-600/40 flex items-center gap-1 transition-all animate-pulse";
         if (label) label.innerText = "Listening... 🔴";
       };
 
@@ -3846,19 +3880,133 @@ Dictation:
         }
       };
 
-      speechRecognitionInstance.onerror = () => {
+      speechRecognitionInstance.onerror = (event) => {
+        if (event && event.error === "no-speech" && !userStoppedVoiceDictation) {
+          return; // Let onend auto-restart across silent pauses
+        }
+        userStoppedVoiceDictation = true;
         isVoiceDictating = false;
-        if (btn) btn.className = "px-2.5 py-1 rounded-lg bg-slate-800 border border-slate-700 text-[11px] font-semibold text-slate-300 hover:bg-slate-700 flex items-center gap-1 transition-all";
+        if (btn) btn.className = "px-2.5 py-1.5 rounded-xl bg-slate-800 border border-slate-700 hover:bg-slate-700 text-xs font-semibold text-slate-200 flex items-center gap-1 transition-colors";
         if (label) label.innerText = "Voice Mic";
       };
 
       speechRecognitionInstance.onend = () => {
+        if (!userStoppedVoiceDictation && isVoiceDictating) {
+          try {
+            speechRecognitionInstance.start();
+            return;
+          } catch (e) {}
+        }
         isVoiceDictating = false;
-        if (btn) btn.className = "px-2.5 py-1 rounded-lg bg-slate-800 border border-slate-700 text-[11px] font-semibold text-slate-300 hover:bg-slate-700 flex items-center gap-1 transition-all";
+        if (btn) btn.className = "px-2.5 py-1.5 rounded-xl bg-slate-800 border border-slate-700 hover:bg-slate-700 text-xs font-semibold text-slate-200 flex items-center gap-1 transition-colors";
         if (label) label.innerText = "Voice Mic";
       };
 
       speechRecognitionInstance.start();
+    }
+
+    // --- Native Gemini Multimodal Audio Memo Recorder (High-Accuracy Orthopedic Terminology + Offline Queue) ---
+    let mediaRecorderInstance = null;
+    let recordedAudioChunks = [];
+    let isRecordingGeminiAudio = false;
+
+    async function toggleGeminiAudioRecording() {
+      const btn = document.getElementById("geminiAudioBtn");
+      const label = document.getElementById("geminiAudioLabel");
+
+      if (isRecordingGeminiAudio && mediaRecorderInstance) {
+        mediaRecorderInstance.stop();
+        return;
+      }
+
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        alert("Microphone recording is not supported in this browser context.");
+        return;
+      }
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        recordedAudioChunks = [];
+        const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+          ? "audio/webm;codecs=opus"
+          : MediaRecorder.isTypeSupported("audio/mp4")
+          ? "audio/mp4"
+          : "";
+        mediaRecorderInstance = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+
+        mediaRecorderInstance.ondataavailable = (e) => {
+          if (e.data && e.data.size > 0) recordedAudioChunks.push(e.data);
+        };
+
+        mediaRecorderInstance.onstart = () => {
+          isRecordingGeminiAudio = true;
+          if (btn) btn.className = "px-2.5 py-1.5 rounded-xl bg-red-600/30 border border-red-500 text-xs font-semibold text-red-200 flex items-center gap-1 animate-pulse";
+          if (label) label.innerText = "Stop & Send Audio 🔴";
+        };
+
+        mediaRecorderInstance.onstop = async () => {
+          isRecordingGeminiAudio = false;
+          stream.getTracks().forEach(t => t.stop());
+          const actualMime = (mediaRecorderInstance.mimeType || "audio/webm").split(";")[0];
+          const blob = new Blob(recordedAudioChunks, { type: actualMime });
+
+          if (label) label.innerText = "Transcribing Audio...";
+          const base64Audio = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(String(reader.result || "").replace(/^data:[^;]+;base64,/, ""));
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+
+          const moduleType = document.getElementById("templateSelect").value;
+          const preVisitText = document.getElementById("preVisitScreeningInput") ? document.getElementById("preVisitScreeningInput").value.trim() : "";
+          const prompt = buildDictationPrompt(
+            preVisitText ? `Pre-Visit Context: ${preVisitText}\n(Transcribe and merge the attached orthopedic audio dictation)` : "Transcribe the attached orthopedic audio dictation and extract all clinical parameters.",
+            moduleType
+          );
+
+          try {
+            if (!navigator.onLine) throw new Error("Offline dead-zone");
+            const rawJsonStr = await callGeminiDirect([
+              { text: prompt },
+              { inlineData: { mimeType: actualMime, data: base64Audio } }
+            ], true);
+            const parsed = safeParseJson(rawJsonStr, null);
+            if (!parsed) throw new Error("Invalid JSON from Gemini audio parser.");
+            setManualNoteEditLock(false);
+            applyParsedDictationData(parsed);
+            if (label) label.innerText = "Audio Parsed ✓";
+          } catch (err) {
+            // Queue audio offline if network is down
+            if (!activeEncounterId) activeEncounterId = "enc_" + Date.now();
+            autoSaveCurrentEncounter(true);
+            const queue = getOfflineAiQueue();
+            queue.push({
+              id: "qa_" + Date.now(),
+              clinicDate: currentClinicDate,
+              encounterId: activeEncounterId,
+              patientName: document.getElementById("ptName").value.trim() || "Audio Encounter",
+              ageGender: document.getElementById("ptAgeGender").value.trim(),
+              moduleType,
+              dictationText: preVisitText,
+              audioBase64: base64Audio,
+              audioMimeType: actualMime,
+              queuedAt: new Date().toISOString()
+            });
+            saveOfflineAiQueue(queue);
+            if (label) label.innerText = "Audio Queued Offline ⏳";
+          } finally {
+            if (btn) btn.className = "px-2.5 py-1.5 rounded-xl bg-indigo-600/20 border border-indigo-500/40 hover:bg-indigo-600/30 text-xs font-semibold text-indigo-300 flex items-center gap-1 transition-colors";
+            setTimeout(() => {
+              if (label) label.innerText = "Audio Memo → AI";
+            }, 2200);
+          }
+        };
+
+        mediaRecorderInstance.start();
+      } catch (err) {
+        alert("Could not access microphone: " + err.message);
+      }
     }
 
     window.addEventListener("DOMContentLoaded", () => {
@@ -3868,6 +4016,7 @@ Dictation:
       updateWaitlistBadges();
       updateApiKeyBadge();
       updateStorageQuotaBadge();
+      updateDeidentifyButtonUI();
       loadCustomTemplatesIntoDropdown();
       renderClinicRosterUI();
       renderOfflineQueueBanner();
@@ -3906,6 +4055,7 @@ Dictation:
     }
 
     function onModuleChanged() {
+      setManualNoteEditLock(false);
       renderTemplateFields();
       autoSaveCurrentEncounter();
     }
@@ -4457,7 +4607,10 @@ Dictation:
     }
 
     // --- Master Note Assembler ---
-    function assembleNote() {
+    function assembleNote(forceSync = false) {
+      if (isNoteManuallyEdited && !forceSync) {
+        return;
+      }
       const type = document.getElementById("templateSelect").value;
       const rawDictation = document.getElementById("dictationBox").value.trim();
       const preVisitText = document.getElementById("preVisitScreeningInput") ? document.getElementById("preVisitScreeningInput").value.trim() : "";
@@ -4775,18 +4928,22 @@ ${procHeader}
     }
 
     function copyNote() {
-      const note = document.getElementById("noteOutput").value;
+      const rawNote = document.getElementById("noteOutput").value;
+      const ptName = document.getElementById("ptName").value || "Patient";
+      const note = applyDeidentificationIfEnabled(rawNote, ptName);
       markActiveEncounterExported();
       navigator.clipboard.writeText(note).then(() => {
         const btn = document.getElementById("copyBtn");
-        btn.innerText = "Copied & Marked Exported ✓";
+        btn.innerText = isDeidentifyEnabled ? "De-ID Copied & Exported ✓" : "Copied & Marked Exported ✓";
         setTimeout(() => { btn.innerText = "Copy Note"; }, 1800);
       });
     }
 
     function shareToKeep() {
-      const note = document.getElementById("noteOutput").value;
-      const ptName = document.getElementById("ptName").value || "Patient";
+      const rawNote = document.getElementById("noteOutput").value;
+      const rawPtName = document.getElementById("ptName").value || "Patient";
+      const note = applyDeidentificationIfEnabled(rawNote, rawPtName);
+      const ptName = isDeidentifyEnabled ? nameToInitials(rawPtName) : rawPtName;
       markActiveEncounterExported();
       if (navigator.share) {
         navigator.share({ title: `Ortho Note - ${ptName}`, text: note }).catch(() => {});
