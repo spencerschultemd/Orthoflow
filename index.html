@@ -92,7 +92,7 @@
   </header>
 
   <!-- ================= MAIN CONTAINER ================= -->
-  <main class="flex-1 max-w-2xl mx-auto w-full min-w-0 p-4 flex flex-col gap-4 pb-12">
+  <main class="flex-1 max-w-2xl mx-auto w-full min-w-0 p-3.5 flex flex-col gap-3 pb-24">
 
     <!-- Workflow Mode Switcher: On-The-Fly Quick Scribe (Doximity Style) vs Scheduled Clinic Roster -->
     <div class="bg-slate-900/95 border border-slate-800 rounded-2xl p-2 flex flex-col gap-2">
@@ -123,45 +123,31 @@
       </div>
     </div>
 
-    <!-- Clinic Date Selector & Batch Schedule Uploader -->
-    <div id="clinicScheduleCard" class="bg-slate-900/90 border border-slate-800 rounded-2xl p-3.5 flex flex-col gap-3">
-      <div class="flex items-center justify-between">
-        <label class="text-[10px] text-slate-400 font-semibold tracking-wider uppercase">Clinic Date & Schedule Roster</label>
-        <span class="text-[10px] text-blue-400 font-mono" id="activeDateDisplay">Loaded</span>
-      </div>
-      <div class="flex gap-2">
-        <input type="date" id="clinicDatePicker" onchange="onClinicDateChange()" class="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500">
-        <button onclick="toggleScreeningModal()" class="px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-xs font-semibold text-slate-200 active:bg-slate-700">
-          View 1-Liners
-        </button>
-      </div>
-
-      <!-- Batch Schedule Photo Uploader (Camera + Gallery) -->
-      <div class="pt-2.5 border-t border-slate-800 flex items-center justify-between gap-2">
-        <div>
-          <span class="text-xs font-bold text-white flex items-center gap-1.5">
-            <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
-            </svg>
-            Import Schedule Photos
-          </span>
-          <p class="text-[10px] text-slate-400">Auto-detects date & extracts all patients</p>
+    <!-- Clinic Date Selector, Compact Schedule Importer & Interactive Roster -->
+    <div id="clinicScheduleCard" class="bg-slate-900/90 border border-slate-800 rounded-2xl p-3 flex flex-col gap-2.5">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center gap-2">
+          <label class="text-[10px] text-slate-400 font-semibold tracking-wider uppercase">Clinic Roster</label>
+          <span class="text-[10px] text-blue-400 font-mono" id="activeDateDisplay">Loaded</span>
         </div>
-        <div class="flex gap-1.5 shrink-0">
-          <label class="cursor-pointer px-2.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold active:bg-blue-700 transition-colors">
-            Camera
+        <div class="flex flex-wrap items-center gap-1.5">
+          <input type="date" id="clinicDatePicker" onchange="onClinicDateChange()" class="bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1 text-xs text-white focus:outline-none focus:border-blue-500">
+          <label class="cursor-pointer px-2.5 py-1 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-semibold active:bg-blue-700 transition-colors" title="Snap schedule photo with camera">
+            📷 Cam
             <input type="file" accept="image/*" capture="environment" class="hidden" onchange="processSchedulePhotos(this)">
           </label>
-          <label class="cursor-pointer px-2.5 py-1.5 rounded-xl bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-200 text-xs font-semibold active:bg-slate-600 transition-colors">
-            Gallery
+          <label class="cursor-pointer px-2.5 py-1 rounded-xl bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-200 text-[11px] font-semibold active:bg-slate-600 transition-colors" title="Import schedule photos from gallery">
+            🖼️ Sched
             <input type="file" id="ocrInput" accept="image/*" multiple class="hidden" onchange="processSchedulePhotos(this)">
           </label>
+          <button onclick="toggleScreeningModal()" class="px-2.5 py-1 rounded-xl bg-slate-800 border border-slate-700 text-[11px] font-semibold text-slate-200 active:bg-slate-700">
+            1-Liners
+          </button>
         </div>
       </div>
 
       <!-- Multi-Photo Progress Bar -->
-      <div id="ocrProgressBox" class="hidden pt-2 border-t border-slate-800">
+      <div id="ocrProgressBox" class="hidden pt-1.5 border-t border-slate-800">
         <div class="flex justify-between text-[11px] mb-1">
           <span id="ocrStatusText" class="text-blue-400 font-medium">Processing schedule photos...</span>
           <span id="ocrPercent" class="text-slate-400 font-mono">0%</span>
@@ -175,270 +161,124 @@
       <div id="encounterRosterSection" class="pt-2 border-t border-slate-800">
         <div class="flex flex-wrap justify-between items-center gap-1.5 mb-2">
           <div class="flex items-center gap-2">
-            <span class="text-[10px] font-semibold tracking-wider uppercase text-slate-400">Scheduled Encounters (<span id="rosterBadgeCount">0</span>)</span>
+            <span class="text-[10px] font-semibold tracking-wider uppercase text-slate-400">Patients (<span id="rosterBadgeCount">0</span>)</span>
             <span id="rosterCompletionSummary" class="text-[10px] font-mono text-slate-400"></span>
           </div>
           <div class="flex items-center gap-2">
-            <button type="button" onclick="openRemainingNotesModal()" id="exportRemainingHeaderBtn" class="px-2 py-1 rounded-lg bg-amber-600/20 border border-amber-500/40 text-[10px] font-semibold text-amber-300 hover:bg-amber-600/30">
+            <button type="button" onclick="openRemainingNotesModal()" id="exportRemainingHeaderBtn" class="px-2 py-0.5 rounded-lg bg-amber-600/20 border border-amber-500/40 text-[10px] font-semibold text-amber-300 hover:bg-amber-600/30">
               📤 Export All Remaining Notes
             </button>
-            <button onclick="createBlankEncounter()" class="text-[11px] text-blue-400 font-medium">+ Blank</button>
+            <button onclick="createBlankEncounter()" class="text-[11px] text-blue-400 font-semibold">+ Blank</button>
           </div>
         </div>
         <div id="missedNotesAlertBanner" class="hidden mb-2 p-2 rounded-xl border border-red-500/50 bg-red-950/30 text-red-200 text-[11px] flex items-center justify-between gap-2"></div>
-        <div id="encounterCardsList" class="flex flex-col gap-2 max-h-60 overflow-y-auto no-scrollbar">
+        <div id="encounterCardsList" class="flex flex-col gap-1.5 max-h-48 overflow-y-auto no-scrollbar">
           <!-- Populated dynamically per clinic date -->
         </div>
       </div>
     </div>
 
-    <!-- Active Patient Encounter Workspace -->
-    <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-sm">
-      <div class="flex justify-between items-center mb-3">
+    <!-- Active Patient Encounter Workspace (With Instant Same-Screen Dictate & Copy Controls) -->
+    <div id="activeEncounterCard" class="bg-slate-900/90 border border-slate-800 rounded-2xl p-3.5 shadow-sm flex flex-col gap-2.5">
+      <div class="flex flex-wrap justify-between items-center gap-2">
         <div class="flex items-center gap-2">
-          <span class="text-[11px] font-semibold tracking-wider uppercase text-blue-400">Active Encounter</span>
+          <span class="text-[11px] font-bold tracking-wider uppercase text-blue-400">Active Encounter</span>
           <span id="activeEncounterTag" class="hidden text-[10px] bg-blue-600/20 text-blue-300 border border-blue-500/40 px-2 py-0.5 rounded-full font-medium">Synced</span>
         </div>
         <div class="flex flex-wrap gap-1.5">
-          <button onclick="saveActiveEncounter()" class="px-2.5 py-1 rounded-lg bg-emerald-600/20 border border-emerald-500/40 text-emerald-400 text-xs font-medium active:bg-emerald-600/30">
+          <button onclick="saveActiveEncounter()" class="px-2 py-1 rounded-lg bg-emerald-600/20 border border-emerald-500/40 text-emerald-400 text-[11px] font-medium active:bg-emerald-600/30">
             Save to Date
           </button>
-          <button onclick="saveAndAdvanceToNextEncounter()" class="px-2.5 py-1 rounded-lg bg-purple-600/20 border border-purple-500/40 text-purple-300 text-xs font-medium active:bg-purple-600/30" title="Keep this chart open on the roster and jump to the next patient">
+          <button onclick="saveAndAdvanceToNextEncounter()" class="px-2 py-1 rounded-lg bg-purple-600/20 border border-purple-500/40 text-purple-300 text-[11px] font-medium active:bg-purple-600/30" title="Keep this chart open on the roster and jump to the next patient">
             Next Pt →
           </button>
-          <button onclick="lookupPatient()" id="matchBtn" class="px-2.5 py-1 rounded-lg bg-blue-600/20 border border-blue-500/40 text-blue-400 text-xs font-medium active:bg-blue-600/30">
+          <button onclick="lookupPatient()" id="matchBtn" class="px-2 py-1 rounded-lg bg-blue-600/20 border border-blue-500/40 text-blue-400 text-[11px] font-medium active:bg-blue-600/30">
             Match Case DB
           </button>
         </div>
       </div>
 
-      <div class="grid grid-cols-2 gap-2 mb-2">
+      <!-- Instant 1-Tap Dictate, Addendum & Copy Bar Right Inside Active Encounter (Zero Scrolling Required) -->
+      <div class="p-2 rounded-xl bg-slate-950/90 border border-emerald-500/30 flex flex-wrap items-center justify-between gap-2">
+        <div class="flex flex-wrap items-center gap-1.5">
+          <button type="button" onclick="toggleVoiceDictation()" id="topEncounterDictateBtn" class="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 border border-emerald-400/60 text-xs font-extrabold text-white flex items-center gap-1.5 shadow-md shadow-emerald-950/50 active:scale-[0.99] transition-all">
+            <span>🎙️</span>
+            <span id="topEncounterDictateLabel">Dictate Now</span>
+          </button>
+          <button type="button" onclick="startVoiceAddendumDictation()" class="px-2.5 py-2 rounded-xl bg-teal-600/25 border border-teal-500/40 hover:bg-teal-600/35 text-xs font-bold text-teal-200 flex items-center gap-1 transition-colors" title="Dictate a quick addendum or field update without clearing existing findings">
+            <span>➕</span>
+            <span>Addendum</span>
+          </button>
+          <button type="button" onclick="parseDictationWithAI()" class="px-2.5 py-2 rounded-xl bg-purple-600/80 hover:bg-purple-500 border border-purple-400/40 text-xs font-bold text-white flex items-center gap-1 transition-colors" title="Run AI Parse on current dictation">
+            <span>⚡</span>
+            <span>AI Parse</span>
+          </button>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <button type="button" onclick="copyNote()" id="topCopyBtn" class="px-2.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-slate-200 transition-colors">
+            Copy
+          </button>
+          <button type="button" onclick="copyNoteAndAdvance()" id="topCopyAndNextBtn" class="px-3 py-2 rounded-xl bg-emerald-600/25 border border-emerald-500/50 hover:bg-emerald-600/35 text-xs font-bold text-emerald-200 transition-colors" title="Copy note, mark Exported ✓, and advance to the next patient">
+            📋 Copy &amp; Next →
+          </button>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2">
         <div>
           <label class="text-[10px] text-slate-400 font-medium block mb-1">Patient Name</label>
-          <input id="ptName" oninput="autoSaveCurrentEncounter()" onblur="lookupPatient()" type="text" placeholder="Last, First" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500">
+          <input id="ptName" oninput="autoSaveCurrentEncounter()" onblur="lookupPatient()" type="text" placeholder="Last, First" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500">
         </div>
         <div>
           <label class="text-[10px] text-slate-400 font-medium block mb-1">Age / Gender</label>
-          <input id="ptAgeGender" oninput="autoSaveCurrentEncounter()" type="text" placeholder="e.g. 64M" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500">
+          <input id="ptAgeGender" oninput="autoSaveCurrentEncounter()" type="text" placeholder="e.g. 64M" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500">
         </div>
       </div>
 
       <!-- Encounter Stage / Status Toggle -->
-      <div class="grid grid-cols-3 gap-1.5 mt-2">
+      <div class="grid grid-cols-3 gap-1.5">
         <button type="button" onclick="setEncounterStage('Pre-Visit')" id="stagePre" class="py-1.5 rounded-lg text-[11px] font-medium border border-blue-500 bg-blue-600/20 text-white">Pre-Visit Prep</button>
         <button type="button" onclick="setEncounterStage('In-Clinic')" id="stageIn" class="py-1.5 rounded-lg text-[11px] font-medium border border-slate-800 bg-slate-950 text-slate-400">In-Clinic</button>
         <button type="button" onclick="setEncounterStage('Completed')" id="stageDone" class="py-1.5 rounded-lg text-[11px] font-medium border border-slate-800 bg-slate-950 text-slate-400">Completed ✓</button>
       </div>
 
       <!-- Matchmaker Status Alert -->
-      <div id="matchAlert" class="hidden mt-3 p-3 rounded-xl border"></div>
+      <div id="matchAlert" class="hidden p-2.5 rounded-xl border"></div>
     </div>
 
-    <!-- Master Template Selector & OR Implant Sticker Scanner -->
-    <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4">
-      <div class="flex flex-wrap justify-between items-center gap-1.5 mb-1.5">
-        <label class="text-[10px] text-slate-400 font-semibold tracking-wider uppercase">Active Clinical Module</label>
-        <div class="flex flex-wrap items-center gap-1.5">
-          <span id="autoRoutedBadge" class="hidden text-[10px] text-blue-400 font-medium bg-blue-900/40 px-2 py-0.5 rounded-full border border-blue-600/40">Auto-Routed</span>
-          <label class="cursor-pointer px-2 py-0.5 rounded-lg bg-emerald-600/20 border border-emerald-500/40 text-[10px] font-semibold text-emerald-300 hover:bg-emerald-600/30 flex items-center gap-1" title="Snap or upload a photo of OR implant peel-pack stickers or circulator log">
-            <span>📷 Scan Implant Stickers</span>
-            <input type="file" accept="image/*" multiple class="hidden" onchange="processImplantPhotos(this)">
-          </label>
-          <button onclick="toggleTemplateStudio()" class="text-[11px] font-semibold text-blue-400 hover:text-blue-300">
-            + New Template
-          </button>
-        </div>
-      </div>
-      <div id="implantScanStatus" class="hidden mb-2 p-2 rounded-xl border border-emerald-500/40 bg-emerald-950/30 text-emerald-200 text-xs"></div>
-      <select id="templateSelect" onchange="onModuleChanged(this.value)" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white font-medium focus:outline-none focus:border-blue-500">
-        <optgroup label="On-The-Fly Quick Scribe (Doximity Style)">
-          <option value="auto_detect">✨ AI Auto-Detect Template from Dictation (Smart Route)</option>
-          <option value="general_soap">General Orthopedic SOAP / Add-On Consult Note</option>
-        </optgroup>
-        <optgroup label="Post-Operative Surveillance">
-          <option value="postop">Post-Operative Follow-Up (2W / 6W / 12W / 1Y)</option>
-        </optgroup>
-        <optgroup label="Primary Arthroplasty Clinic">
-          <option value="new_hip">New Hip Consultation (OA / AVN / Dysplasia)</option>
-          <option value="new_knee">New Knee Consultation (OA / Alignment)</option>
-        </optgroup>
-        <optgroup label="Revision & Problem Arthroplasty">
-          <option value="painful_joint">Painful TKA / THA (Failed Arthroplasty / PJI Workup)</option>
-        </optgroup>
-        <optgroup label="Telehealth & Remote Care">
-          <option value="telehealth">Telephone Visit (MSK Diagnostic Review / 99441-3)</option>
-        </optgroup>
-        <optgroup label="Sports & Consultations">
-          <option value="sports">New Sports Knee / Shoulder Consult</option>
-          <option value="hip_fx">Geriatric Hip Fracture Inpatient Consult</option>
-          <option value="gen_fx">General ED Fracture Consult</option>
-        </optgroup>
-        <optgroup label="Operative Reports - Adult Reconstruction (Zimmer Biomet)">
-          <option value="op_da_tha">Direct Anterior THA (Bikini / Standard / Z1)</option>
-          <option value="op_primary_tka">Primary Total Knee Arthroplasty (Persona CR/PS)</option>
-          <option value="op_hip_hemi">Bipolar Hip Hemiarthroplasty (Direct Anterior)</option>
-          <option value="op_rev_tka">Revision TKA - Liner Exchange (Regional IO Vanc)</option>
-          <option value="op_uka">UKA - Oxford Partial Knee</option>
-          <option value="op_stage1_pji">Stage 1 Revision THA / TKA (PJI Debridement & Spacer)</option>
-          <option value="op_stage2_tha">Stage 2 Revision THA (Re-Implantation)</option>
-        </optgroup>
-        <optgroup label="Operative Reports - Trauma & Fractures (Synthes / Stryker)">
-          <option value="op_lat_plateau">Lateral Tibial Plateau ORIF (Synthes 3.5mm LPHP / Raft)</option>
-          <option value="op_med_plateau">Medial Tibial Plateau ORIF (Posteromedial Buttress)</option>
-          <option value="op_bicondylar_plateau">Bicondylar Tibial Plateau ORIF (Dual Incision/Plating)</option>
-          <option value="op_clavicle">Clavicle Shaft ORIF (Precontoured Superior/Anteroinferior Plate)</option>
-          <option value="op_femur_fx">ORIF Periprosthetic Femur Fracture (Cable / Plate)</option>
-        </optgroup>
-        <optgroup label="Custom User Operative Templates" id="customTemplateGroup"></optgroup>
-      </select>
-    </div>
-
-    <!-- Dynamic Form Area -->
-    <div id="dynamicForm" oninput="autoSaveCurrentEncounter(); assembleNote();" onchange="autoSaveCurrentEncounter(); assembleNote();" class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 flex flex-col gap-3"></div>
-
-    <!-- In-Clinic Joint Injection / Aspiration (CPT 20610/20611) & Pre-Op Optimization / Med-Hold Guardrails -->
-    <div id="clinicAddonsSection" class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 flex flex-col gap-3">
-      <!-- 1. In-Clinic Injection / Diagnostic Aspiration Add-On -->
-      <div>
-        <div class="flex justify-between items-center mb-1.5">
-          <label class="text-[10px] text-slate-400 font-semibold tracking-wider uppercase">In-Clinic Injection / Aspiration Add-On</label>
-          <span class="text-[10px] text-emerald-400 font-mono">CPT 20610 / 20611</span>
-        </div>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <select id="clinicProcType" onchange="onClinicProcChanged()" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-2 text-xs text-white focus:outline-none focus:border-emerald-500">
-            <option value="none">None (Evaluation Only)</option>
-            <option value="inj_20610">Corticosteroid Injection — Landmark (CPT 20610)</option>
-            <option value="inj_20611">Corticosteroid Injection — US / Fluoro Guided (CPT 20611)</option>
-            <option value="visco_20610">Viscosupplementation / HA Injection (CPT 20610)</option>
-            <option value="asp_pji">Diagnostic Joint Aspiration — PJI / Synovial Workup (CPT 20610)</option>
-          </select>
-          <input id="clinicProcDetails" oninput="autoSaveCurrentEncounter(); assembleNote();" type="text" placeholder="Injectate / synovial aspirate details (auto-fills on selection)" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-2 text-xs text-white focus:outline-none focus:border-emerald-500">
-        </div>
-      </div>
-
-      <!-- 2. Arthroplasty Pre-Op Optimization & Med-Hold Guardrails -->
-      <div class="pt-2.5 border-t border-slate-800/80">
-        <div class="flex justify-between items-center mb-1.5">
-          <label class="text-[10px] text-slate-400 font-semibold tracking-wider uppercase">Pre-Op Optimization &amp; Medication Hold Guardrails</label>
-          <span class="text-[10px] text-amber-400 font-medium">Auto-Syncs to Note &amp; Waitlist</span>
-        </div>
-        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-2">
-          <div>
-            <label class="text-[9px] text-slate-400 block mb-0.5">BMI / Weight Cutoff</label>
-            <select id="optBmi" onchange="autoSaveCurrentEncounter(); assembleNote();" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-[11px] text-white">
-              <option value="BMI < 40 (Cleared)">BMI &lt; 40 (Cleared)</option>
-              <option value="BMI 35-39.9 (Counseled on weight optimization)">BMI 35–39.9 (Counseled)</option>
-              <option value="BMI >= 40 (HOLD SURGERY — Bariatric/Nutrition Optimization Required)">BMI ≥ 40 (Hard Hold)</option>
-            </select>
-          </div>
-          <div>
-            <label class="text-[9px] text-slate-400 block mb-0.5">HbA1c / Glycemic</label>
-            <select id="optA1c" onchange="autoSaveCurrentEncounter(); assembleNote();" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-[11px] text-white">
-              <option value="HbA1c < 7.5% / Euglycemic (Cleared)">A1c &lt; 7.5% / Normal</option>
-              <option value="Pre-Op HbA1c Ordered (Target < 7.5%)">Order Pre-Op A1c</option>
-              <option value="HbA1c >= 8.0% (HOLD SURGERY — Endocrine Optimization Required)">A1c ≥ 8.0% (Hard Hold)</option>
-            </select>
-          </div>
-          <div class="col-span-2 sm:col-span-1">
-            <label class="text-[9px] text-slate-400 block mb-0.5">Nicotine / Smoking</label>
-            <select id="optNicotine" onchange="autoSaveCurrentEncounter(); assembleNote();" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-[11px] text-white">
-              <option value="Non-Smoker / Nicotine-Free (Cleared)">Nicotine Negative ✓</option>
-              <option value="Active Nicotine Use (HOLD ELECTIVE ARTHROPLASTY — Cessation & Negative Urine Cotinine Required)">Active Nicotine (Hold)</option>
-            </select>
-          </div>
-        </div>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <div>
-            <label class="text-[9px] text-slate-400 block mb-0.5">Perioperative Anticoagulation Hold</label>
-            <select id="optAnticoag" onchange="autoSaveCurrentEncounter(); assembleNote();" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-[11px] text-white">
-              <option value="None (Standard Aspirin 81mg PO BID DVT Prophylaxis)">None (Standard ASA 81mg BID)</option>
-              <option value="Eliquis (Apixaban) / Xarelto (Rivaroxaban) — HOLD 72 HOURS prior to surgery">Eliquis / Xarelto (Hold 72h prior)</option>
-              <option value="Warfarin (Coumadin) — HOLD 5 DAYS prior to surgery; verify pre-op INR < 1.5">Warfarin / Coumadin (Hold 5d, INR &lt;1.5)</option>
-              <option value="Plavix (Clopidogrel) — HOLD 7 DAYS prior to surgery per Cardiology">Plavix / Clopidogrel (Hold 7d prior)</option>
-            </select>
-          </div>
-          <div>
-            <label class="text-[9px] text-slate-400 block mb-0.5">GLP-1 Agonist Anesthesia Hold</label>
-            <select id="optGlp1" onchange="autoSaveCurrentEncounter(); assembleNote();" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-[11px] text-white">
-              <option value="None (Not on GLP-1 therapy)">None (Not on GLP-1)</option>
-              <option value="Weekly GLP-1 Agonist (Ozempic/Wegovy/Mounjaro/Zepbound) — HOLD 7 DAYS prior to surgery + clear liquid diet 24h prior per ASA guidelines">Weekly GLP-1 (Hold 7 days prior)</option>
-            </select>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Dynamic Wound Closure -->
-    <div id="woundClosureSection" class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4">
-      <label class="text-[10px] text-slate-400 font-semibold tracking-wider uppercase block mb-2">Wound Closure & Dressing Protocol</label>
-      <div class="grid grid-cols-3 gap-2">
-        <button type="button" onclick="setClosure('default')" id="btnClosureDefault" class="py-2 px-1 rounded-xl text-center border text-[11px] font-medium border-blue-500 bg-blue-600/20 text-white">
-          Sylke + Aquacel
-        </button>
-        <button type="button" onclick="setClosure('prineo')" id="btnClosurePrineo" class="py-2 px-1 rounded-xl text-center border text-[11px] font-medium border-slate-800 bg-slate-950 text-slate-400">
-          Prineo + Mepilex
-        </button>
-        <button type="button" onclick="setClosure('prevena')" id="btnClosurePrevena" class="py-2 px-1 rounded-xl text-center border text-[11px] font-medium border-slate-800 bg-slate-950 text-slate-400">
-          Prevena (-125mmHg)
-        </button>
-      </div>
-    </div>
-
-    <!-- Pre-Visit Screening, Pre-Loaded Radiographic Findings & 1-Liner Summary -->
-    <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 flex flex-col gap-2.5">
-      <div>
-        <div class="flex justify-between items-center mb-1">
-          <label class="text-[10px] text-slate-400 font-semibold tracking-wider uppercase">1-Liner Summary / Predicted Workup &amp; Plan</label>
-          <span class="text-[10px] text-amber-400 font-medium">Auto-Populates 1-Liner Sheet</span>
-        </div>
-        <input id="postOpInstructions" oninput="autoSaveCurrentEncounter(); assembleNote();" type="text" placeholder="e.g. R Hip OA consult — discuss DA-THA, check dental/A1c" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500">
-      </div>
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        <div>
-          <div class="flex justify-between items-center mb-1">
-            <label class="text-[10px] text-slate-400 font-semibold tracking-wider uppercase">Radiographic / X-Ray Findings</label>
-            <span class="text-[10px] text-emerald-400 font-medium">Pre-Loads into Note</span>
-          </div>
-          <input id="xrayFindingsInput" oninput="autoSaveCurrentEncounter(); assembleNote();" type="text" placeholder="e.g. Standing AP pelvis: KL-4 bone-on-bone R hip OA, superior JSN" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500">
-        </div>
-        <div>
-          <div class="flex justify-between items-center mb-1">
-            <label class="text-[10px] text-slate-400 font-semibold tracking-wider uppercase">Day-Of X-Rays / Orders Needed</label>
-            <span class="text-[10px] text-sky-400 font-medium">Flags on 1-Liner List</span>
-          </div>
-          <input id="preVisitOrdersInput" oninput="autoSaveCurrentEncounter(); assembleNote();" type="text" placeholder="e.g. Needs new standing AP pelvis w/ marker ball on arrival" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-sky-500">
-        </div>
-      </div>
-    </div>
-
-    <!-- Raw Notes, Dictation & Gemini AI Parse Engine (2-Stage Pre-Visit -> Day-Of Merge + On-The-Fly Dropdown) -->
-    <div id="dictationWorkspaceCard" class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4">
+    <!-- Raw Notes, Dictation & Gemini AI Parse Engine (Positioned Immediately Below Active Encounter for Same-Screen Access) -->
+    <div id="dictationWorkspaceCard" class="bg-slate-900/90 border border-slate-800 rounded-2xl p-3.5">
       <div class="flex flex-wrap justify-between items-center gap-1.5 mb-2">
         <div class="flex items-center gap-2">
           <label class="text-[10px] text-slate-400 font-semibold tracking-wider uppercase" id="dictationBoxHeaderLabel">Dictation &amp; Clinical Notes</label>
-          <span class="text-[10px] text-purple-400 font-medium">Direct Gemini 3.8 Flash</span>
+          <span id="autoRoutedBadge" class="hidden text-[10px] text-blue-400 font-medium bg-blue-900/40 px-2 py-0.5 rounded-full border border-blue-600/40">Auto-Routed</span>
         </div>
         <div class="flex flex-wrap items-center gap-1.5">
           <button type="button" onclick="toggleOrthoLibraryModal()" class="px-2 py-0.5 rounded-lg bg-emerald-600/20 border border-emerald-500/40 text-[10px] font-semibold text-emerald-300 hover:bg-emerald-600/35" title="Open Dragon/Doximity-style Medical, Surgical & Orthopaedic Vocabulary Library (Upload .txt/.csv/.json word lists or add phonetic fixes)">
             📚 Ortho Library
           </button>
           <button type="button" onclick="startOnTheFlyDictation()" class="px-2 py-0.5 rounded-lg bg-indigo-600/25 border border-indigo-500/50 text-[10px] font-semibold text-indigo-200 hover:bg-indigo-600/40" title="Detach from any scheduled encounter and start a fresh on-the-fly dictation right now">
-            ⚡ New On-The-Fly Dictation
+            ⚡ New On-The-Fly
           </button>
           <button type="button" onclick="transitionToDayOfDictation()" id="startDayOfBtn" class="px-2 py-0.5 rounded-lg bg-blue-600/20 border border-blue-500/40 text-[10px] font-semibold text-blue-300 hover:bg-blue-600/30" title="Lock current Pre-Visit Screening notes above and open a clean Day-Of Clinic Dictation box that merges into the final note">
-            ➕ Start Day-Of Dictation (Preserve Pre-Screen)
+            ➕ Day-Of Dictation
           </button>
         </div>
       </div>
 
       <!-- Inline Quick-Select Template Dropdown (Doximity Scribe Style — Always right above the Dictation Box) -->
-      <div class="mb-2.5 flex items-center gap-2 bg-slate-950/90 border border-slate-800 rounded-xl px-2.5 py-1.5">
+      <div class="mb-2 flex items-center gap-2 bg-slate-950/90 border border-slate-800 rounded-xl px-2.5 py-1.5">
         <span class="text-[10px] font-bold uppercase tracking-wider text-indigo-300 shrink-0">Template:</span>
         <select id="quickTemplateSelect" onchange="onModuleChanged(this.value)" class="flex-1 bg-transparent border-0 text-xs text-white font-medium focus:outline-none"></select>
+        <label class="cursor-pointer px-2 py-0.5 rounded-lg bg-emerald-600/20 border border-emerald-500/40 text-[10px] font-semibold text-emerald-300 hover:bg-emerald-600/30 flex items-center gap-1 shrink-0" title="Snap or upload a photo of OR implant peel-pack stickers or circulator log">
+          <span>📷 Stickers</span>
+          <input type="file" accept="image/*" multiple class="hidden" onchange="processImplantPhotos(this)">
+        </label>
       </div>
+      <div id="implantScanStatus" class="hidden mb-2 p-2 rounded-xl border border-emerald-500/40 bg-emerald-950/30 text-emerald-200 text-xs"></div>
 
       <!-- Preserved Pre-Visit Screening Context Box (Shown when transitioning from Pre-Visit Prep to In-Clinic) -->
-      <div id="preVisitContextBox" class="hidden mb-2.5 p-2.5 rounded-xl bg-slate-950/90 border border-blue-500/40">
+      <div id="preVisitContextBox" class="hidden mb-2 p-2.5 rounded-xl bg-slate-950/90 border border-blue-500/40">
         <div class="flex justify-between items-center mb-1">
           <span class="text-[10px] font-bold uppercase tracking-wider text-blue-300">📋 Preserved Pre-Visit Screening Notes (Merged into Definitive Note)</span>
           <span class="text-[9px] text-slate-400">Editable</span>
@@ -446,10 +286,10 @@
         <textarea id="preVisitScreeningInput" oninput="autoSaveCurrentEncounter(); assembleNote();" rows="2" class="w-full bg-slate-900/80 border border-slate-800 rounded-lg p-2 text-xs text-slate-200 focus:outline-none focus:border-blue-500 no-scrollbar"></textarea>
       </div>
 
-      <textarea id="dictationBox" oninput="autoSaveCurrentEncounter(); assembleNote();" rows="3" placeholder="Dictate pre-visit screening notes OR day-of clinic exam & surgical plan..." class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-blue-500 no-scrollbar"></textarea>
+      <textarea id="dictationBox" oninput="autoSaveCurrentEncounter(); assembleNote();" rows="3" placeholder="Dictate pre-visit screening notes OR day-of clinic exam & surgical plan..." class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500 no-scrollbar"></textarea>
       <div id="liveInterimSpeechPreview" class="hidden mt-1.5 px-2.5 py-1 rounded-lg bg-red-950/30 border border-red-500/30 text-[11px] text-red-200 italic truncate"></div>
       
-      <div class="flex flex-wrap justify-between items-center gap-2 mt-2.5 pt-2 border-t border-slate-800/80">
+      <div class="flex flex-wrap justify-between items-center gap-2 mt-2 pt-2 border-t border-slate-800/80">
         <div class="flex flex-wrap items-center gap-2.5">
           <label class="inline-flex items-center gap-1.5 cursor-pointer select-none" title="Automatically run AI Parse Dictation as soon as you finish dictating (minimum 3 words)">
             <input type="checkbox" id="autoParseOnStopToggle" checked onchange="saveAutoParsePreference(this.checked)" class="rounded border-slate-700 bg-slate-950 text-emerald-500 focus:ring-0 w-3.5 h-3.5">
@@ -488,8 +328,8 @@
       <div id="offlineQueueAlert" class="hidden mt-2 p-2.5 rounded-xl border border-sky-500/50 bg-sky-950/30 text-sky-200 text-xs"></div>
     </div>
 
-    <!-- Assembled Clinical Note Output -->
-    <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 flex flex-col gap-2">
+    <!-- Assembled Clinical Note Output (With Extracted Cues & Quick Chips Right Below Dictation) -->
+    <div id="noteOutputCard" class="bg-slate-900/90 border border-slate-800 rounded-2xl p-3.5 flex flex-col gap-2">
       <div class="flex flex-wrap justify-between items-center gap-1.5">
         <div class="flex flex-wrap items-center gap-1.5">
           <label class="text-[10px] text-slate-400 font-semibold tracking-wider uppercase">Generated Clinical Documentation</label>
@@ -510,7 +350,7 @@
 
       <textarea id="noteOutput" oninput="onManualNoteEdit()" rows="11" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-slate-200 font-mono leading-relaxed focus:outline-none no-scrollbar"></textarea>
 
-      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2">
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-1">
         <button onclick="copyNote()" id="copyBtn" class="py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-xs font-semibold text-white active:bg-slate-700">
           Copy Note
         </button>
@@ -526,7 +366,214 @@
       </div>
     </div>
 
+    <!-- Collapsible Manual Form Overrides, Pre-Visit 1-Liner/X-Ray, Injections & Pre-Op Guardrails -->
+    <details id="manualControlsDrawer" class="bg-slate-900/90 border border-slate-800 rounded-2xl overflow-hidden group">
+      <summary class="cursor-pointer list-none p-3.5 flex items-center justify-between gap-2 select-none hover:bg-slate-800/40 transition-colors">
+        <div class="flex items-center gap-2 min-w-0">
+          <span class="text-xs font-bold text-slate-200">⚙️ Manual Form Overrides, X-Ray/Orders, Injections &amp; Pre-Op Guardrails</span>
+          <span class="text-[10px] text-slate-400 hidden sm:inline">(Auto-populated by voice; tap to expand manual fields)</span>
+        </div>
+        <span class="text-[10px] font-semibold text-blue-400 px-2 py-0.5 rounded-lg bg-blue-950/60 border border-blue-800/60 shrink-0">Expand / Edit ▾</span>
+      </summary>
+
+      <div class="p-3.5 pt-0 border-t border-slate-800/80 flex flex-col gap-3 mt-2">
+        <!-- Pre-Visit Screening, Pre-Loaded Radiographic Findings & 1-Liner Summary -->
+        <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-3 flex flex-col gap-2.5">
+          <div>
+            <div class="flex justify-between items-center mb-1">
+              <label class="text-[10px] text-slate-400 font-semibold tracking-wider uppercase">1-Liner Summary / Predicted Workup &amp; Plan</label>
+              <span class="text-[10px] text-amber-400 font-medium">Auto-Populates 1-Liner Sheet</span>
+            </div>
+            <input id="postOpInstructions" oninput="autoSaveCurrentEncounter(); assembleNote();" type="text" placeholder="e.g. R Hip OA consult — discuss DA-THA, check dental/A1c" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500">
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div>
+              <div class="flex justify-between items-center mb-1">
+                <label class="text-[10px] text-slate-400 font-semibold tracking-wider uppercase">Radiographic / X-Ray Findings</label>
+                <span class="text-[10px] text-emerald-400 font-medium">Pre-Loads into Note</span>
+              </div>
+              <input id="xrayFindingsInput" oninput="autoSaveCurrentEncounter(); assembleNote();" type="text" placeholder="e.g. Standing AP pelvis: KL-4 bone-on-bone R hip OA, superior JSN" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500">
+            </div>
+            <div>
+              <div class="flex justify-between items-center mb-1">
+                <label class="text-[10px] text-slate-400 font-semibold tracking-wider uppercase">Day-Of X-Rays / Orders Needed</label>
+                <span class="text-[10px] text-sky-400 font-medium">Flags on 1-Liner List</span>
+              </div>
+              <input id="preVisitOrdersInput" oninput="autoSaveCurrentEncounter(); assembleNote();" type="text" placeholder="e.g. Needs new standing AP pelvis w/ marker ball on arrival" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-sky-500">
+            </div>
+          </div>
+        </div>
+
+        <!-- Master Template Selector & Custom Template Studio Trigger -->
+        <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-3">
+          <div class="flex flex-wrap justify-between items-center gap-1.5 mb-1.5">
+            <label class="text-[10px] text-slate-400 font-semibold tracking-wider uppercase">Active Clinical Module</label>
+            <button onclick="toggleTemplateStudio()" class="text-[11px] font-semibold text-blue-400 hover:text-blue-300">
+              + New Custom Template
+            </button>
+          </div>
+          <select id="templateSelect" onchange="onModuleChanged(this.value)" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-medium focus:outline-none focus:border-blue-500">
+            <optgroup label="On-The-Fly Quick Scribe (Doximity Style)">
+              <option value="auto_detect">✨ AI Auto-Detect Template from Dictation (Smart Route)</option>
+              <option value="general_soap">General Orthopedic SOAP / Add-On Consult Note</option>
+            </optgroup>
+            <optgroup label="Post-Operative Surveillance">
+              <option value="postop">Post-Operative Follow-Up (2W / 6W / 12W / 1Y)</option>
+            </optgroup>
+            <optgroup label="Primary Arthroplasty Clinic">
+              <option value="new_hip">New Hip Consultation (OA / AVN / Dysplasia)</option>
+              <option value="new_knee">New Knee Consultation (OA / Alignment)</option>
+            </optgroup>
+            <optgroup label="Revision & Problem Arthroplasty">
+              <option value="painful_joint">Painful TKA / THA (Failed Arthroplasty / PJI Workup)</option>
+            </optgroup>
+            <optgroup label="Telehealth & Remote Care">
+              <option value="telehealth">Telephone Visit (MSK Diagnostic Review / 99441-3)</option>
+            </optgroup>
+            <optgroup label="Sports & Consultations">
+              <option value="sports">New Sports Knee / Shoulder Consult</option>
+              <option value="hip_fx">Geriatric Hip Fracture Inpatient Consult</option>
+              <option value="gen_fx">General ED Fracture Consult</option>
+            </optgroup>
+            <optgroup label="Operative Reports - Adult Reconstruction (Zimmer Biomet)">
+              <option value="op_da_tha">Direct Anterior THA (Bikini / Standard / Z1)</option>
+              <option value="op_primary_tka">Primary Total Knee Arthroplasty (Persona CR/PS)</option>
+              <option value="op_hip_hemi">Bipolar Hip Hemiarthroplasty (Direct Anterior)</option>
+              <option value="op_rev_tka">Revision TKA - Liner Exchange (Regional IO Vanc)</option>
+              <option value="op_uka">UKA - Oxford Partial Knee</option>
+              <option value="op_stage1_pji">Stage 1 Revision THA / TKA (PJI Debridement & Spacer)</option>
+              <option value="op_stage2_tha">Stage 2 Revision THA (Re-Implantation)</option>
+            </optgroup>
+            <optgroup label="Operative Reports - Trauma & Fractures (Synthes / Stryker)">
+              <option value="op_lat_plateau">Lateral Tibial Plateau ORIF (Synthes 3.5mm LPHP / Raft)</option>
+              <option value="op_med_plateau">Medial Tibial Plateau ORIF (Posteromedial Buttress)</option>
+              <option value="op_bicondylar_plateau">Bicondylar Tibial Plateau ORIF (Dual Incision/Plating)</option>
+              <option value="op_clavicle">Clavicle Shaft ORIF (Precontoured Superior/Anteroinferior Plate)</option>
+              <option value="op_femur_fx">ORIF Periprosthetic Femur Fracture (Cable / Plate)</option>
+            </optgroup>
+            <optgroup label="Custom User Operative Templates" id="customTemplateGroup"></optgroup>
+          </select>
+        </div>
+
+        <!-- Dynamic Form Area -->
+        <div id="dynamicForm" oninput="autoSaveCurrentEncounter(); assembleNote();" onchange="autoSaveCurrentEncounter(); assembleNote();" class="bg-slate-950/70 border border-slate-800 rounded-xl p-3 flex flex-col gap-3"></div>
+
+        <!-- In-Clinic Joint Injection / Aspiration (CPT 20610/20611) & Pre-Op Optimization / Med-Hold Guardrails -->
+        <div id="clinicAddonsSection" class="bg-slate-950/70 border border-slate-800 rounded-xl p-3 flex flex-col gap-3">
+          <!-- 1. In-Clinic Injection / Diagnostic Aspiration Add-On -->
+          <div>
+            <div class="flex justify-between items-center mb-1.5">
+              <label class="text-[10px] text-slate-400 font-semibold tracking-wider uppercase">In-Clinic Injection / Aspiration Add-On</label>
+              <span class="text-[10px] text-emerald-400 font-mono">CPT 20610 / 20611</span>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <select id="clinicProcType" onchange="onClinicProcChanged()" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-2 text-xs text-white focus:outline-none focus:border-emerald-500">
+                <option value="none">None (Evaluation Only)</option>
+                <option value="inj_20610">Corticosteroid Injection — Landmark (CPT 20610)</option>
+                <option value="inj_20611">Corticosteroid Injection — US / Fluoro Guided (CPT 20611)</option>
+                <option value="visco_20610">Viscosupplementation / HA Injection (CPT 20610)</option>
+                <option value="asp_pji">Diagnostic Joint Aspiration — PJI / Synovial Workup (CPT 20610)</option>
+              </select>
+              <input id="clinicProcDetails" oninput="autoSaveCurrentEncounter(); assembleNote();" type="text" placeholder="Injectate / synovial aspirate details (auto-fills on selection)" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-2 text-xs text-white focus:outline-none focus:border-emerald-500">
+            </div>
+          </div>
+
+          <!-- 2. Arthroplasty Pre-Op Optimization & Med-Hold Guardrails -->
+          <div class="pt-2.5 border-t border-slate-800/80">
+            <div class="flex justify-between items-center mb-1.5">
+              <label class="text-[10px] text-slate-400 font-semibold tracking-wider uppercase">Pre-Op Optimization &amp; Medication Hold Guardrails</label>
+              <span class="text-[10px] text-amber-400 font-medium">Auto-Syncs to Note &amp; Waitlist</span>
+            </div>
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-2">
+              <div>
+                <label class="text-[9px] text-slate-400 block mb-0.5">BMI / Weight Cutoff</label>
+                <select id="optBmi" onchange="autoSaveCurrentEncounter(); assembleNote();" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-[11px] text-white">
+                  <option value="BMI < 40 (Cleared)">BMI &lt; 40 (Cleared)</option>
+                  <option value="BMI 35-39.9 (Counseled on weight optimization)">BMI 35–39.9 (Counseled)</option>
+                  <option value="BMI >= 40 (HOLD SURGERY — Bariatric/Nutrition Optimization Required)">BMI ≥ 40 (Hard Hold)</option>
+                </select>
+              </div>
+              <div>
+                <label class="text-[9px] text-slate-400 block mb-0.5">HbA1c / Glycemic</label>
+                <select id="optA1c" onchange="autoSaveCurrentEncounter(); assembleNote();" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-[11px] text-white">
+                  <option value="HbA1c < 7.5% / Euglycemic (Cleared)">A1c &lt; 7.5% / Normal</option>
+                  <option value="Pre-Op HbA1c Ordered (Target < 7.5%)">Order Pre-Op A1c</option>
+                  <option value="HbA1c >= 8.0% (HOLD SURGERY — Endocrine Optimization Required)">A1c ≥ 8.0% (Hard Hold)</option>
+                </select>
+              </div>
+              <div class="col-span-2 sm:col-span-1">
+                <label class="text-[9px] text-slate-400 block mb-0.5">Nicotine / Smoking</label>
+                <select id="optNicotine" onchange="autoSaveCurrentEncounter(); assembleNote();" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-[11px] text-white">
+                  <option value="Non-Smoker / Nicotine-Free (Cleared)">Nicotine Negative ✓</option>
+                  <option value="Active Nicotine Use (HOLD ELECTIVE ARTHROPLASTY — Cessation & Negative Urine Cotinine Required)">Active Nicotine (Hold)</option>
+                </select>
+              </div>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div>
+                <label class="text-[9px] text-slate-400 block mb-0.5">Perioperative Anticoagulation Hold</label>
+                <select id="optAnticoag" onchange="autoSaveCurrentEncounter(); assembleNote();" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-[11px] text-white">
+                  <option value="None (Standard Aspirin 81mg PO BID DVT Prophylaxis)">None (Standard ASA 81mg BID)</option>
+                  <option value="Eliquis (Apixaban) / Xarelto (Rivaroxaban) — HOLD 72 HOURS prior to surgery">Eliquis / Xarelto (Hold 72h prior)</option>
+                  <option value="Warfarin (Coumadin) — HOLD 5 DAYS prior to surgery; verify pre-op INR < 1.5">Warfarin / Coumadin (Hold 5d, INR &lt;1.5)</option>
+                  <option value="Plavix (Clopidogrel) — HOLD 7 DAYS prior to surgery per Cardiology">Plavix / Clopidogrel (Hold 7d prior)</option>
+                </select>
+              </div>
+              <div>
+                <label class="text-[9px] text-slate-400 block mb-0.5">GLP-1 Agonist Anesthesia Hold</label>
+                <select id="optGlp1" onchange="autoSaveCurrentEncounter(); assembleNote();" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-[11px] text-white">
+                  <option value="None (Not on GLP-1 therapy)">None (Not on GLP-1)</option>
+                  <option value="Weekly GLP-1 Agonist (Ozempic/Wegovy/Mounjaro/Zepbound) — HOLD 7 DAYS prior to surgery + clear liquid diet 24h prior per ASA guidelines">Weekly GLP-1 (Hold 7 days prior)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Dynamic Wound Closure -->
+        <div id="woundClosureSection" class="bg-slate-950/70 border border-slate-800 rounded-xl p-3">
+          <label class="text-[10px] text-slate-400 font-semibold tracking-wider uppercase block mb-2">Wound Closure &amp; Dressing Protocol</label>
+          <div class="grid grid-cols-3 gap-2">
+            <button type="button" onclick="setClosure('default')" id="btnClosureDefault" class="py-2 px-1 rounded-xl text-center border text-[11px] font-medium border-blue-500 bg-blue-600/20 text-white">
+              Sylke + Aquacel
+            </button>
+            <button type="button" onclick="setClosure('prineo')" id="btnClosurePrineo" class="py-2 px-1 rounded-xl text-center border text-[11px] font-medium border-slate-800 bg-slate-950 text-slate-400">
+              Prineo + Mepilex
+            </button>
+            <button type="button" onclick="setClosure('prevena')" id="btnClosurePrevena" class="py-2 px-1 rounded-xl text-center border text-[11px] font-medium border-slate-800 bg-slate-950 text-slate-400">
+              Prevena (-125mmHg)
+            </button>
+          </div>
+        </div>
+      </div>
+    </details>
+
   </main>
+
+  <!-- ================= STICKY BOTTOM QUICK-ACTION DOCK (Always Visible Zero-Scroll Bar) ================= -->
+  <div id="stickyEncounterDock" class="fixed bottom-0 inset-x-0 z-40 bg-slate-950/95 backdrop-blur-md border-t border-slate-800 px-3 py-2 shadow-2xl">
+    <div class="max-w-2xl mx-auto flex items-center justify-between gap-2">
+      <div class="min-w-0 flex-1">
+        <div class="flex items-center gap-1.5">
+          <span id="dockActivePtLabel" class="text-xs font-bold text-white truncate">⚡ On-The-Fly Scribe</span>
+          <span id="dockActiveStageBadge" class="text-[9px] px-1.5 py-0.5 rounded bg-blue-950 text-blue-300 border border-blue-700/50 font-semibold shrink-0">Ready</span>
+        </div>
+        <p id="dockActiveSubLabel" class="text-[10px] text-slate-400 truncate">Tap Dictate to capture exam &amp; auto-parse</p>
+      </div>
+      <div class="flex items-center gap-1.5 shrink-0">
+        <button type="button" onclick="toggleVoiceDictation()" id="dockDictateBtn" class="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 border border-emerald-400/60 text-xs font-extrabold text-white flex items-center gap-1 shadow-md active:scale-[0.98] transition-all">
+          <span>🎙️</span>
+          <span>Dictate</span>
+        </button>
+        <button type="button" onclick="startVoiceAddendumDictation()" class="px-2.5 py-2 rounded-xl bg-teal-600/25 border border-teal-500/40 hover:bg-teal-600/35 text-xs font-bold text-teal-200 flex items-center gap-1" title="Speak an addendum or targeted update">
+          <span>➕</span>
+        </button>
+        <button type="button" onclick="copyNoteAndAdvance()" id="dockCopyNextBtn" class="px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 border border-blue-400/50 text-xs font-bold text-white flex items-center gap-1 shadow-md active:scale-[0.98] transition-all" title="Copy note, mark Exported ✓, and advance to next patient">
+          <span>📋 Copy &amp; Next →</span>
+        </button>
+      </div>
+    </div>
+  </div>
 
   <!-- ================= GEMINI API KEY & DEVICE BACKUP MODAL ================= -->
   <div id="apiKeyModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex flex-col justify-end p-0 sm:p-4">
@@ -3271,6 +3318,22 @@ NOTES:
       renderClinicRosterUI();
     }
 
+    function loadAndStartDictation(event, encounterId) {
+      if (event) event.stopPropagation();
+      loadEncounterIntoWorkspace(encounterId);
+      setTimeout(() => {
+        toggleVoiceDictation();
+      }, 60);
+    }
+
+    function loadAndStartAddendum(event, encounterId) {
+      if (event) event.stopPropagation();
+      loadEncounterIntoWorkspace(encounterId);
+      setTimeout(() => {
+        startVoiceAddendumDictation();
+      }, 60);
+    }
+
     function deleteEncounter(event, encounterId) {
       event.stopPropagation();
       const encounters = getClinicEncounters(currentClinicDate).filter(e => e.id !== encounterId);
@@ -3428,6 +3491,11 @@ ${enc.planSummary || 'Standard orthopedic management and follow-up protocol.'}`;
                 ${ordersTag}
               </div>
               <div class="flex items-center gap-1 shrink-0">
+                <button type="button" onclick="loadAndStartDictation(event, '${enc.id}')" title="Select patient & immediately open Dictation screen" class="px-2 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 border border-emerald-400/60 text-[10px] font-bold text-white flex items-center gap-1 shadow-sm">
+                  <span>🎙️</span>
+                  <span>Dictate</span>
+                </button>
+                ${enc.dictation ? `<button type="button" onclick="loadAndStartAddendum(event, '${enc.id}')" title="Speak an addendum for this patient" class="px-1.5 py-1 rounded-lg bg-teal-900/50 border border-teal-500/50 text-[10px] font-bold text-teal-200 hover:bg-teal-800/60">➕</button>` : ''}
                 <button type="button" onclick="toggleEncounterIncompleteFlag(event, '${enc.id}')" title="Toggle Missed / Needs Completion flag" class="px-1.5 py-1 rounded border text-[10px] ${enc.flaggedIncomplete ? 'bg-red-900/50 border-red-500 text-red-200' : 'bg-slate-900 border-slate-800 text-slate-500 hover:text-amber-300'}">⚠️</button>
                 <button type="button" onclick="toggleEncounterExported(event, '${enc.id}')" title="Toggle Exported status" class="px-1.5 py-1 rounded border text-[10px] ${enc.exported ? 'bg-emerald-900/50 border-emerald-500 text-emerald-200' : 'bg-slate-900 border-slate-800 text-slate-500 hover:text-emerald-300'}">✓</button>
                 <button type="button" onclick="deleteEncounter(event, '${enc.id}')" class="p-1 text-slate-500 hover:text-red-400 text-xs">✕</button>
@@ -7100,6 +7168,25 @@ ${procHeader}
         </div>
         ${quickChips.length > 0 ? `<div class="flex items-center gap-3 flex-wrap pt-1 border-t border-slate-800/80">${quickChips.join("")}</div>` : ""}
       `;
+
+      // Sync Sticky Bottom Quick-Action Dock with Active Patient & Stage
+      const dockPt = document.getElementById("dockActivePtLabel");
+      const dockStage = document.getElementById("dockActiveStageBadge");
+      const dockSub = document.getElementById("dockActiveSubLabel");
+      if (dockPt) {
+        dockPt.innerText = ptVal ? `👤 ${ptVal}` : "⚡ On-The-Fly Scribe";
+      }
+      if (dockStage) {
+        dockStage.innerText = ptVal ? (activeEncounterStage || "In-Clinic") : "Quick Scribe";
+        dockStage.className = activeEncounterStage === "Completed"
+          ? "text-[9px] px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-600/50 font-semibold shrink-0"
+          : activeEncounterStage === "In-Clinic"
+          ? "text-[9px] px-1.5 py-0.5 rounded bg-amber-950 text-amber-300 border border-amber-600/50 font-semibold shrink-0"
+          : "text-[9px] px-1.5 py-0.5 rounded bg-blue-950 text-blue-300 border border-blue-700/50 font-semibold shrink-0";
+      }
+      if (dockSub) {
+        dockSub.innerText = `${modLabels[type] || type}${planVal ? " — " + planVal : ""}`;
+      }
     }
 
     function applyQuickChipRom(romStr) {
@@ -7213,8 +7300,15 @@ ${procHeader}
       markActiveEncounterExported();
       navigator.clipboard.writeText(note).then(() => {
         const btn = document.getElementById("copyBtn");
-        btn.innerText = isDeidentifyEnabled ? "De-ID Copied & Exported ✓" : "Copied & Marked Exported ✓";
-        setTimeout(() => { btn.innerText = "Copy Note"; }, 1800);
+        const topBtn = document.getElementById("topCopyBtn");
+        if (btn) {
+          btn.innerText = isDeidentifyEnabled ? "De-ID Copied & Exported ✓" : "Copied & Marked Exported ✓";
+          setTimeout(() => { btn.innerText = "Copy Note"; }, 1800);
+        }
+        if (topBtn) {
+          topBtn.innerText = "Copied ✓";
+          setTimeout(() => { topBtn.innerText = "Copy"; }, 1800);
+        }
       });
     }
 
@@ -7226,10 +7320,14 @@ ${procHeader}
 
       const advanceAfterCopy = () => {
         const btn = document.getElementById("copyAndNextBtn");
-        if (btn) {
-          btn.innerText = "Copied & Advancing ✓";
-          setTimeout(() => { btn.innerText = "📋 Copy & Next →"; }, 1600);
-        }
+        const topBtn = document.getElementById("topCopyAndNextBtn");
+        const dockBtn = document.getElementById("dockCopyNextBtn");
+        [btn, topBtn, dockBtn].forEach(b => {
+          if (b) {
+            b.innerText = "Copied & Advancing ✓";
+            setTimeout(() => { b.innerText = "📋 Copy & Next →"; }, 1600);
+          }
+        });
         const encounters = getClinicEncounters(currentClinicDate);
         const currentIdx = encounters.findIndex(e => e.id === activeEncounterId);
         // Find the next unexported encounter after the current one, or wrap around to any remaining unexported encounter
