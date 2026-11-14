@@ -444,23 +444,36 @@
       </div>
 
       <textarea id="dictationBox" oninput="autoSaveCurrentEncounter(); assembleNote();" rows="3" placeholder="Dictate pre-visit screening notes OR day-of clinic exam & surgical plan..." class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-blue-500 no-scrollbar"></textarea>
+      <div id="liveInterimSpeechPreview" class="hidden mt-1.5 px-2.5 py-1 rounded-lg bg-red-950/30 border border-red-500/30 text-[11px] text-red-200 italic truncate"></div>
       
       <div class="flex flex-wrap justify-between items-center gap-2 mt-2.5 pt-2 border-t border-slate-800/80">
-        <span class="text-[10px] text-slate-400" id="voiceDictationStatus">Speak naturally, then distribute:</span>
+        <div class="flex flex-wrap items-center gap-2.5">
+          <label class="inline-flex items-center gap-1.5 cursor-pointer select-none" title="Automatically run AI Parse Dictation as soon as you finish dictating (minimum 3 words)">
+            <input type="checkbox" id="autoParseOnStopToggle" checked onchange="saveAutoParsePreference(this.checked)" class="rounded border-slate-700 bg-slate-950 text-emerald-500 focus:ring-0 w-3.5 h-3.5">
+            <span class="text-[10px] font-semibold text-emerald-300" id="voiceDictationStatus">Auto-Parse on Done</span>
+          </label>
+          <button type="button" onclick="restoreRawDictationText()" id="restoreRawDictationBtn" class="hidden px-2 py-0.5 rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700 text-[10px] font-semibold text-amber-300" title="Restore your original raw spoken/typed shorthand before AI expanded it">
+            ↩️ Restore Raw Dictation
+          </button>
+        </div>
         <div class="flex flex-wrap items-center gap-1.5">
-          <button type="button" onclick="toggleVoiceDictation()" id="voiceMicBtn" class="px-2.5 py-1.5 rounded-xl bg-slate-800 border border-slate-700 hover:bg-slate-700 text-xs font-semibold text-slate-200 flex items-center gap-1 transition-colors" title="Continuous Web Speech live transcription (auto-restarts across pauses)">
-            <span>🎙️</span>
-            <span id="voiceMicLabel">Voice Mic</span>
+          <button type="button" onclick="toggleVoiceDictation()" id="voiceMicBtn" class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 border border-emerald-400/50 text-xs font-bold text-white flex items-center gap-1.5 transition-all shadow-sm" title="1-tap to start dictating; tap again when finished to stop & automatically run AI Parse Dictation">
+            <span id="voiceMicIcon">🎙️</span>
+            <span id="voiceMicLabel">Dictate</span>
+          </button>
+          <button type="button" onclick="pauseVoiceDictationWithoutParse()" id="voicePauseBtn" class="hidden px-2.5 py-1.5 rounded-xl bg-amber-600/25 border border-amber-500/50 hover:bg-amber-600/40 text-xs font-semibold text-amber-200 flex items-center gap-1 transition-colors" title="Pause microphone without running AI Parse yet so you can resume speaking or edit first">
+            <span>⏸️</span>
+            <span>Pause</span>
           </button>
           <button type="button" onclick="toggleGeminiAudioRecording()" id="geminiAudioBtn" class="px-2.5 py-1.5 rounded-xl bg-indigo-600/20 border border-indigo-500/40 hover:bg-indigo-600/30 text-xs font-semibold text-indigo-300 flex items-center gap-1 transition-colors" title="Record high-accuracy audio memo directly for Gemini multimodal orthopedic parsing (works offline & queues automatically)">
             <span>🎧</span>
             <span id="geminiAudioLabel">Audio Memo → AI</span>
           </button>
-          <button type="button" onclick="parseDictationWithAI()" id="aiParseBtn" class="px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-xs font-semibold text-white active:bg-purple-700 flex items-center gap-1.5 transition-colors">
+          <button type="button" onclick="parseDictationWithAI()" id="aiParseBtn" class="px-2.5 py-1.5 rounded-xl bg-purple-600/80 hover:bg-purple-500 border border-purple-400/40 text-xs font-semibold text-white active:bg-purple-700 flex items-center gap-1 transition-colors" title="Manually run AI Parse on typed or paused dictation notes">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
             </svg>
-            AI Parse Dictation
+            <span>AI Parse</span>
           </button>
         </div>
       </div>
@@ -2019,6 +2032,11 @@ NOTES:
       const quickBanner = document.getElementById("quickScribeBanner");
       if (quickBanner) quickBanner.classList.remove("hidden");
 
+      lastRawDictationBeforeAiParse = "";
+      const restoreBtn = document.getElementById("restoreRawDictationBtn");
+      if (restoreBtn) restoreBtn.classList.add("hidden");
+      resetVoiceMicButtonUI(false);
+
       resetAddonFieldsToDefault();
       updateStageButtons();
       updatePreVisitContextUI();
@@ -2707,6 +2725,11 @@ NOTES:
     }
 
     function setDynamicFormValues(formValues) {
+      lastRawDictationBeforeAiParse = "";
+      const restoreBtn = document.getElementById("restoreRawDictationBtn");
+      if (restoreBtn) restoreBtn.classList.add("hidden");
+      resetVoiceMicButtonUI(false);
+
       resetAddonFieldsToDefault();
       if (!formValues || typeof formValues !== "object") return;
       Object.entries(formValues).forEach(([id, val]) => {
@@ -2784,6 +2807,11 @@ NOTES:
       document.getElementById("dictationBox").value = "";
       document.getElementById("matchAlert").classList.add("hidden");
       document.getElementById("activeEncounterTag").classList.remove("hidden");
+      lastRawDictationBeforeAiParse = "";
+      const restoreBtn = document.getElementById("restoreRawDictationBtn");
+      if (restoreBtn) restoreBtn.classList.add("hidden");
+      resetVoiceMicButtonUI(false);
+
       resetAddonFieldsToDefault();
       updateStageButtons();
       updatePreVisitContextUI();
@@ -3002,6 +3030,10 @@ NOTES:
         document.getElementById("preVisitScreeningInput").value = enc.preVisitScreening || "";
       }
       document.getElementById("dictationBox").value = enc.dictation || "";
+      lastRawDictationBeforeAiParse = "";
+      const restoreBtn = document.getElementById("restoreRawDictationBtn");
+      if (restoreBtn) restoreBtn.classList.add("hidden");
+      resetVoiceMicButtonUI(false);
       const tag = document.getElementById("activeEncounterTag");
       if (tag) {
         tag.innerText = "Synced";
@@ -3020,7 +3052,12 @@ NOTES:
       if (enc.formValues) {
         setDynamicFormValues(enc.formValues);
       } else {
-        resetAddonFieldsToDefault();
+        lastRawDictationBeforeAiParse = "";
+      const restoreBtn = document.getElementById("restoreRawDictationBtn");
+      if (restoreBtn) restoreBtn.classList.add("hidden");
+      resetVoiceMicButtonUI(false);
+
+      resetAddonFieldsToDefault();
       }
 
       lookupPatient(false);
@@ -3723,7 +3760,15 @@ Extract and return ONLY valid JSON matching:
       }
 
       const narrative = parsed.expandedClinicalNarrative || parsed.remainingNotes || localCues.polishedNarrative;
-      if (narrative) document.getElementById("dictationBox").value = narrative;
+      if (narrative) {
+        const currentRaw = document.getElementById("dictationBox").value.trim();
+        if (currentRaw && currentRaw !== narrative) {
+          lastRawDictationBeforeAiParse = currentRaw;
+          const restoreBtn = document.getElementById("restoreRawDictationBtn");
+          if (restoreBtn) restoreBtn.classList.remove("hidden");
+        }
+        document.getElementById("dictationBox").value = narrative;
+      }
 
       const wlAlert = document.getElementById("waitlistDictationAlert");
       if (parsed.signedUpForSurgery === true) {
@@ -3979,7 +4024,7 @@ Dictation:
         enqueueOfflineDictation(dictationText, moduleType);
         btn.innerText = "Queued Offline ⏳";
         setTimeout(() => {
-          btn.innerHTML = `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg> AI Parse Dictation`;
+          btn.innerHTML = `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg> <span>AI Parse</span>`;
         }, 2200);
         return;
       }
@@ -4000,7 +4045,7 @@ Dictation:
 
         btn.innerText = "Distributed ✓";
         setTimeout(() => {
-          btn.innerHTML = `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg> AI Parse Dictation`;
+          btn.innerHTML = `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg> <span>AI Parse</span>`;
           btn.disabled = false;
         }, 2000);
       } catch (err) {
@@ -4012,60 +4057,176 @@ Dictation:
           btn.innerText = "Queued Offline ⏳";
         } else {
           alert(`AI Parse Error:\n${msg}`);
-          btn.innerHTML = `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg> AI Parse Dictation`;
+          btn.innerHTML = `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg> <span>AI Parse</span>`;
         }
         setTimeout(() => {
-          btn.innerHTML = `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg> AI Parse Dictation`;
+          btn.innerHTML = `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg> <span>AI Parse</span>`;
           btn.disabled = false;
         }, 2200);
       }
     }
 
-    // --- Hands-Free Web Speech API Voice Dictation (With Pause Auto-Restart) ---
+    // --- Hands-Free Web Speech API Voice Dictation (1-Tap Dictate -> 1-Tap Done & Auto-Parse + Pause + Raw Undo) ---
     let speechRecognitionInstance = null;
     let isVoiceDictating = false;
     let userStoppedVoiceDictation = false;
+    let shouldAutoParseAfterStop = false;
+    let wordsSpokenThisSession = 0;
+    let pendingInterimTranscript = "";
+    let lastRawDictationBeforeAiParse = "";
+
+    function saveAutoParsePreference(enabled) {
+      safeSetLocalStorage("orthoflow_auto_parse_on_stop", enabled ? "1" : "0");
+    }
+
+    function loadAutoParsePreference() {
+      const saved = localStorage.getItem("orthoflow_auto_parse_on_stop");
+      const toggle = document.getElementById("autoParseOnStopToggle");
+      if (toggle && saved !== null) {
+        toggle.checked = saved !== "0";
+      }
+    }
+
+    function restoreRawDictationText() {
+      if (!lastRawDictationBeforeAiParse) return;
+      const box = document.getElementById("dictationBox");
+      if (box) {
+        box.value = lastRawDictationBeforeAiParse;
+        autoSaveCurrentEncounter();
+        assembleNote(true);
+      }
+      const restoreBtn = document.getElementById("restoreRawDictationBtn");
+      if (restoreBtn) restoreBtn.classList.add("hidden");
+    }
+
+    function resetVoiceMicButtonUI(isPausedState = false) {
+      const btn = document.getElementById("voiceMicBtn");
+      const icon = document.getElementById("voiceMicIcon");
+      const label = document.getElementById("voiceMicLabel");
+      const pauseBtn = document.getElementById("voicePauseBtn");
+      const interimBox = document.getElementById("liveInterimSpeechPreview");
+      if (btn) {
+        btn.className = "px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 border border-emerald-400/50 text-xs font-bold text-white flex items-center gap-1.5 transition-all shadow-sm";
+      }
+      if (icon) icon.innerText = "🎙️";
+      if (label) label.innerText = isPausedState ? "Resume Dictation" : "Dictate";
+      if (pauseBtn) pauseBtn.classList.add("hidden");
+      if (interimBox) {
+        interimBox.innerText = "";
+        interimBox.classList.add("hidden");
+      }
+    }
+
+    function flushPendingInterimTranscript() {
+      if (pendingInterimTranscript && pendingInterimTranscript.trim()) {
+        const box = document.getElementById("dictationBox");
+        if (box) {
+          const existing = box.value.trim();
+          box.value = (existing ? existing + " " : "") + pendingInterimTranscript.trim();
+          const newWords = pendingInterimTranscript.trim().split(/\s+/).filter(Boolean).length;
+          wordsSpokenThisSession += newWords;
+          pendingInterimTranscript = "";
+          autoSaveCurrentEncounter();
+          assembleNote();
+        }
+      }
+    }
+
+    function pauseVoiceDictationWithoutParse() {
+      if (!isVoiceDictating || !speechRecognitionInstance) return;
+      shouldAutoParseAfterStop = false;
+      userStoppedVoiceDictation = true;
+      isVoiceDictating = false;
+      flushPendingInterimTranscript();
+      try { speechRecognitionInstance.stop(); } catch (e) {}
+      resetVoiceMicButtonUI(true);
+    }
 
     function toggleVoiceDictation() {
       const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!SpeechRec) {
-        alert("Browser SpeechRecognition API is not supported in this browser. Use the 'Audio Memo -> AI' button next to it for direct Gemini voice transcription!");
+        alert("Browser SpeechRecognition API is not supported in this browser. Using 'Audio Memo -> AI' instead for direct Gemini voice transcription!");
+        toggleGeminiAudioRecording();
         return;
       }
 
       const btn = document.getElementById("voiceMicBtn");
+      const icon = document.getElementById("voiceMicIcon");
       const label = document.getElementById("voiceMicLabel");
+      const pauseBtn = document.getElementById("voicePauseBtn");
+      const interimBox = document.getElementById("liveInterimSpeechPreview");
 
       if (isVoiceDictating && speechRecognitionInstance) {
+        // User clicked "Done & AI Parse" (or "Stop Dictation" if Auto-Parse is unchecked)
+        const autoParseToggle = document.getElementById("autoParseOnStopToggle");
+        shouldAutoParseAfterStop = autoParseToggle ? autoParseToggle.checked : true;
         userStoppedVoiceDictation = true;
         isVoiceDictating = false;
-        speechRecognitionInstance.stop();
+        if (label) label.innerText = "Finishing...";
+        try { speechRecognitionInstance.stop(); } catch (e) {}
+
+        // Wait 550ms for the browser's final speech recognition chunk to flush so the last word is never clipped
+        setTimeout(() => {
+          flushPendingInterimTranscript();
+          resetVoiceMicButtonUI(false);
+          if (shouldAutoParseAfterStop) {
+            const currentText = (document.getElementById("dictationBox").value || "").trim();
+            const totalWords = currentText.split(/\s+/).filter(Boolean).length;
+            if (wordsSpokenThisSession >= 3 || (wordsSpokenThisSession > 0 && totalWords >= 3)) {
+              shouldAutoParseAfterStop = false;
+              parseDictationWithAI();
+            }
+          }
+        }, 550);
         return;
       }
 
       userStoppedVoiceDictation = false;
+      shouldAutoParseAfterStop = false;
+      wordsSpokenThisSession = 0;
+      pendingInterimTranscript = "";
+
       speechRecognitionInstance = new SpeechRec();
       speechRecognitionInstance.continuous = true;
-      speechRecognitionInstance.interimResults = false;
+      speechRecognitionInstance.interimResults = true;
       speechRecognitionInstance.lang = "en-US";
 
       speechRecognitionInstance.onstart = () => {
         isVoiceDictating = true;
-        if (btn) btn.className = "px-2.5 py-1.5 rounded-xl bg-red-600/30 border border-red-500 text-xs font-semibold text-red-200 hover:bg-red-600/40 flex items-center gap-1 transition-all animate-pulse";
-        if (label) label.innerText = "Listening... 🔴";
+        const autoParseToggle = document.getElementById("autoParseOnStopToggle");
+        const autoParseActive = autoParseToggle ? autoParseToggle.checked : true;
+        if (btn) btn.className = "px-3 py-1.5 rounded-xl bg-red-600/35 border border-red-400 text-xs font-bold text-red-100 hover:bg-red-600/50 flex items-center gap-1.5 transition-all animate-pulse shadow-sm";
+        if (icon) icon.innerText = "⏹️";
+        if (label) label.innerText = autoParseActive ? "Done & AI Parse 🔴" : "Stop Dictation 🔴";
+        if (pauseBtn) pauseBtn.classList.remove("hidden");
       };
 
       speechRecognitionInstance.onresult = (event) => {
-        let transcriptChunk = "";
+        let finalChunk = "";
+        let interimChunk = "";
         for (let i = event.resultIndex; i < event.results.length; i++) {
           if (event.results[i].isFinal) {
-            transcriptChunk += event.results[i][0].transcript + " ";
+            finalChunk += event.results[i][0].transcript + " ";
+          } else {
+            interimChunk += event.results[i][0].transcript;
           }
         }
-        if (transcriptChunk.trim()) {
+        pendingInterimTranscript = interimChunk;
+        if (interimBox) {
+          if (interimChunk.trim()) {
+            interimBox.innerText = `🎙️ "${interimChunk.trim()}..."`;
+            interimBox.classList.remove("hidden");
+          } else {
+            interimBox.innerText = "";
+            interimBox.classList.add("hidden");
+          }
+        }
+        if (finalChunk.trim()) {
+          pendingInterimTranscript = "";
           const box = document.getElementById("dictationBox");
           const existing = box.value.trim();
-          box.value = (existing ? existing + " " : "") + transcriptChunk.trim();
+          box.value = (existing ? existing + " " : "") + finalChunk.trim();
+          wordsSpokenThisSession += finalChunk.trim().split(/\s+/).filter(Boolean).length;
           autoSaveCurrentEncounter();
           assembleNote();
         }
@@ -4077,8 +4238,8 @@ Dictation:
         }
         userStoppedVoiceDictation = true;
         isVoiceDictating = false;
-        if (btn) btn.className = "px-2.5 py-1.5 rounded-xl bg-slate-800 border border-slate-700 hover:bg-slate-700 text-xs font-semibold text-slate-200 flex items-center gap-1 transition-colors";
-        if (label) label.innerText = "Voice Mic";
+        flushPendingInterimTranscript();
+        resetVoiceMicButtonUI(false);
       };
 
       speechRecognitionInstance.onend = () => {
@@ -4089,8 +4250,6 @@ Dictation:
           } catch (e) {}
         }
         isVoiceDictating = false;
-        if (btn) btn.className = "px-2.5 py-1.5 rounded-xl bg-slate-800 border border-slate-700 hover:bg-slate-700 text-xs font-semibold text-slate-200 flex items-center gap-1 transition-colors";
-        if (label) label.innerText = "Voice Mic";
       };
 
       speechRecognitionInstance.start();
@@ -4202,6 +4361,7 @@ Dictation:
 
     window.addEventListener("DOMContentLoaded", () => {
       initKeypad();
+      loadAutoParsePreference();
       document.getElementById("clinicDatePicker").value = currentClinicDate;
       document.getElementById("registryCount").innerText = getSurgicalCases().length;
       updateWaitlistBadges();
