@@ -419,6 +419,9 @@
           <span class="text-[10px] text-purple-400 font-medium">Direct Gemini 3.8 Flash</span>
         </div>
         <div class="flex flex-wrap items-center gap-1.5">
+          <button type="button" onclick="toggleOrthoLibraryModal()" class="px-2 py-0.5 rounded-lg bg-emerald-600/20 border border-emerald-500/40 text-[10px] font-semibold text-emerald-300 hover:bg-emerald-600/35" title="Open Dragon/Doximity-style Medical, Surgical & Orthopaedic Vocabulary Library (Upload .txt/.csv/.json word lists or add phonetic fixes)">
+            📚 Ortho Library
+          </button>
           <button type="button" onclick="startOnTheFlyDictation()" class="px-2 py-0.5 rounded-lg bg-indigo-600/25 border border-indigo-500/50 text-[10px] font-semibold text-indigo-200 hover:bg-indigo-600/40" title="Detach from any scheduled encounter and start a fresh on-the-fly dictation right now">
             ⚡ New On-The-Fly Dictation
           </button>
@@ -880,16 +883,21 @@ NOTES:
           <input type="checkbox" id="hybridAudioEnhanceToggle" checked onchange="saveHybridAudioPreference(this.checked)" class="rounded border-slate-700 bg-slate-950 text-indigo-500 focus:ring-0 w-3.5 h-3.5">
           <span class="text-[11px] font-medium text-indigo-200">🎧 Send Raw Audio to Gemini on Done (Max Ortho Accuracy)</span>
         </label>
-        <button type="button" onclick="promptAddCustomOrthoTerm()" class="px-2 py-0.5 rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700 text-[10px] font-semibold text-emerald-300">
-          + Add Ortho Term Fix
-        </button>
+        <div class="flex items-center gap-1.5">
+          <button type="button" onclick="toggleOrthoLibraryModal()" class="px-2 py-0.5 rounded-lg bg-emerald-600/20 border border-emerald-500/50 hover:bg-emerald-600/35 text-[10px] font-semibold text-emerald-300">
+            📚 Ortho Library (Upload / Manage)
+          </button>
+          <button type="button" onclick="promptAddCustomOrthoTerm()" class="px-2 py-0.5 rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700 text-[10px] font-semibold text-slate-300">
+            + Quick Fix
+          </button>
+        </div>
       </div>
     </div>
 
     <!-- Center: Large Live Dictation Transcript & Interim Preview -->
     <div class="max-w-lg w-full mx-auto flex-1 flex flex-col my-3 min-h-0">
       <div class="flex items-center justify-between mb-1.5">
-        <span class="text-[10px] font-bold uppercase tracking-wider text-emerald-400">✓ 110+ Orthopedic &amp; Implant Terms Auto-Corrected Live</span>
+        <span id="focusModalLibraryCountLabel" class="text-[10px] font-bold uppercase tracking-wider text-emerald-400">✓ 350+ Medical, Surgical &amp; Ortho Library Terms Active</span>
         <button type="button" onclick="clearFocusModalTranscript()" class="text-[11px] text-slate-400 hover:text-red-400 font-semibold">🧹 Clear Text</button>
       </div>
       <textarea id="focusModalTranscript" oninput="syncTranscriptFromFocusModal(this.value)" placeholder="Speak naturally... (e.g., '68yo male right hip OA, KL grade 4 bone on bone, IR 5 degrees, sign up for right direct anterior THA in December')" class="flex-1 w-full bg-slate-900/90 border-2 border-slate-800 focus:border-blue-500 rounded-2xl p-4 text-sm sm:text-base text-white leading-relaxed focus:outline-none resize-none"></textarea>
@@ -913,6 +921,78 @@ NOTES:
       <button type="button" onclick="completeFocusDictationWithoutAi()" class="w-full py-2 rounded-xl bg-slate-900 border border-slate-800 hover:bg-slate-800 text-xs font-semibold text-slate-400 hover:text-slate-200">
         ✓ Done (Keep Text Without AI Parse)
       </button>
+    </div>
+  </div>
+
+  <!-- ================= DRAGON / DOXIMITY-STYLE MEDICAL, SURGICAL & ORTHOPAEDIC VOCABULARY LIBRARY MODAL ================= -->
+  <div id="orthoLibraryModal" class="hidden fixed inset-0 z-[60] bg-black/85 backdrop-blur-sm flex flex-col justify-end sm:justify-center p-0 sm:p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-t-3xl sm:rounded-2xl max-w-2xl w-full mx-auto p-4 sm:p-5 flex flex-col max-h-[90vh] shadow-2xl">
+      <div class="flex justify-between items-start gap-2 mb-3 pb-2.5 border-b border-slate-800">
+        <div>
+          <div class="flex items-center gap-2">
+            <h2 class="text-sm font-bold text-white uppercase tracking-wider">📚 Medical, Surgical &amp; Orthopaedic Vocabulary Library</h2>
+            <span id="orthoLibraryTotalBadge" class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-500/40 text-emerald-300">350+ Active Terms</span>
+          </div>
+          <p class="text-[11px] text-slate-400 mt-0.5">Dragon / Doximity Scribe–style lexicon: biases live speech phonetic matching AND anchors Gemini audio/text transcription.</p>
+        </div>
+        <button type="button" onclick="toggleOrthoLibraryModal()" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center font-bold shrink-0">✕</button>
+      </div>
+
+      <!-- Upload / Import / Export Bar -->
+      <div class="bg-slate-950/90 border border-slate-800 rounded-xl p-3 mb-3 flex flex-col gap-2.5">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <span class="text-[11px] font-bold text-indigo-300 block">📂 Upload Custom / Dragon Vocabulary List (.txt, .csv, .json)</span>
+            <span class="text-[10px] text-slate-400">One term per line (e.g. <code class="text-emerald-300">Persona CR</code>) OR phonetic rule (<code class="text-amber-300">putting an email =&gt; pitting edema</code> or Dragon <code class="text-amber-300">Written\\Spoken</code>)</span>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <label class="cursor-pointer px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 border border-indigo-400/50 text-xs font-bold text-white flex items-center gap-1.5">
+              <span>📥 Upload File</span>
+              <input type="file" id="orthoLibraryFileInput" accept=".txt,.csv,.json" onchange="handleOrthoLibraryFileUpload(this)" class="hidden">
+            </label>
+            <button type="button" onclick="exportOrthoVocabularyLibrary()" class="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-slate-200">
+              📤 Export .txt
+            </button>
+          </div>
+        </div>
+
+        <!-- Quick Bulk Add / Phonetic Fix Input -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2 border-t border-slate-800/80">
+          <textarea id="orthoLibraryBulkInput" rows="2" placeholder="Paste 1 or 100+ terms (one per line) or phonetic rules like:&#10;putting an email => pitting edema&#10;Zimmer Persona Revision" class="sm:col-span-2 w-full bg-slate-900 border border-slate-800 rounded-xl p-2 text-xs text-white focus:outline-none focus:border-emerald-500 no-scrollbar"></textarea>
+          <div class="flex flex-col gap-1.5 justify-between">
+            <select id="orthoLibraryAddCategory" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-[11px] text-white">
+              <option value="Custom / Uploaded">Category: Custom / Uploaded</option>
+              <option value="Arthroplasty & Procedures">Arthroplasty &amp; Procedures</option>
+              <option value="Physical Exam & Wound">Physical Exam &amp; Wound</option>
+              <option value="Imaging & Classifications">Imaging &amp; Classifications</option>
+              <option value="Implants & Closures">Implants &amp; Closures</option>
+              <option value="Medications & Blocks">Medications &amp; Blocks</option>
+            </select>
+            <button type="button" onclick="addBulkTermsToOrthoLibrary()" class="w-full py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-white">
+              + Add to Active Library
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Category Filter & Search Bar -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2.5">
+        <select id="orthoLibraryFilterCategory" onchange="renderOrthoLibraryModalList()" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500">
+          <option value="ALL">All Domains (Built-In + Custom Library)</option>
+          <option value="PHONETIC_RULES">🔊 Phonetic Auto-Correction Rules (Spoken → Medical)</option>
+          <option value="Custom / Uploaded">⭐ My Custom / Uploaded Terms &amp; Rules</option>
+          <option value="Arthroplasty & Procedures">🦴 Arthroplasty &amp; Surgical Procedures</option>
+          <option value="Physical Exam & Wound">🩺 Physical Exam, Wound &amp; Vascular</option>
+          <option value="Imaging & Classifications">🩻 Radiographic, MRI &amp; Classifications</option>
+          <option value="Implants & Closures">🔩 Implants, Prostheses &amp; Wound Closure</option>
+          <option value="Medications & Blocks">💊 Medications, Blocks &amp; Injectables</option>
+          <option value="Comorbidities & Labs">🧪 Comorbidities, PJI Labs &amp; Clearances</option>
+        </select>
+        <input id="orthoLibrarySearchInput" oninput="renderOrthoLibraryModalList()" type="text" placeholder="Search library terms or misheard phrases (e.g. 'edema', 'Persona', 'Kellgren')..." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500">
+      </div>
+
+      <!-- Scrollable Vocabulary List -->
+      <div id="orthoLibraryListContainer" class="flex-1 overflow-y-auto bg-slate-950 border border-slate-800 rounded-xl p-3 space-y-1.5 max-h-72"></div>
     </div>
   </div>
 
@@ -1158,6 +1238,8 @@ NOTES:
         orthoflow_surgical_cases: getSurgicalCases(),
         orthoflow_surgery_waitlist: getSurgeryWaitlist(),
         orthoflow_custom_templates: getCustomTemplates(),
+        orthoflow_custom_ortho_terms: getCustomOrthoTerms(),
+        orthoflow_uploaded_vocab_terms: getUploadedVocabTerms(),
         encountersByDate: {}
       };
 
@@ -1202,6 +1284,12 @@ NOTES:
           if (Array.isArray(data.orthoflow_custom_templates)) {
             safeSetLocalStorage("orthoflow_custom_templates", JSON.stringify(data.orthoflow_custom_templates));
             loadCustomTemplatesIntoDropdown();
+          }
+          if (Array.isArray(data.orthoflow_custom_ortho_terms)) {
+            safeSetLocalStorage("orthoflow_custom_ortho_terms", JSON.stringify(data.orthoflow_custom_ortho_terms));
+          }
+          if (Array.isArray(data.orthoflow_uploaded_vocab_terms)) {
+            saveUploadedVocabTerms(data.orthoflow_uploaded_vocab_terms);
           }
           if (data.encountersByDate && typeof data.encountersByDate === "object") {
             Object.entries(data.encountersByDate).forEach(([dateStr, encArr]) => {
@@ -4038,9 +4126,10 @@ Extract and return ONLY valid JSON matching:
     }
 
     function buildDictationPrompt(dictationText, moduleType) {
+      const librarySnippet = typeof getActiveOrthoLibraryPromptSnippet === "function" ? getActiveOrthoLibraryPromptSnippet() : "";
       return `You are an expert orthopedic surgical and clinical documentation assistant.
 Extract structured clinical parameters from this raw physician dictation and return ONLY a valid JSON object matching this schema.
-IMPORTANT ORTHOPEDIC SPEECH-TO-TEXT CORRECTION: This input comes from live speech recognition, which may contain phonetic homophones for orthopedic terms. Automatically recognize and correct any phonetic misrecognitions in context (e.g., "strata fix"/"stratified" -> "Stratafix", "pre vena"/"pravina" -> "Prevena", "prinny oh" -> "Prineo", "persona see are" -> "Persona CR", "kelvin lawrence"/"callaghan lawrence" -> "Kellgren-Lawrence", "stinch field" -> "Stinchfield", "fade ear" -> "FADIR", "trendelenburg", "lachman", "varus"/"valgus", "tricompartmental", "subchondral", "osteophytes", "acetabular", "G7 OsseoTi", "Z1 stem", "Oxford UKA", "Eliquis", "Xarelto", "Mounjaro").
+IMPORTANT ORTHOPEDIC SPEECH-TO-TEXT CORRECTION & ACTIVE VOCABULARY LIBRARY: This input comes from live speech recognition, which may contain phonetic homophones for medical, surgical, and orthopedic terms. Automatically recognize and correct any phonetic misrecognitions in context using the active Orthopaedic & Surgical Vocabulary Library below (e.g., "putting an email" -> "pitting edema", "strata fix"/"stratified" -> "Stratafix", "pre vena"/"pravina" -> "Prevena", "prinny oh" -> "Prineo", "persona see are" -> "Persona CR", "kelvin lawrence"/"callaghan lawrence" -> "Kellgren-Lawrence", "stinch field" -> "Stinchfield", "fade ear" -> "FADIR", "trendelenburg", "lachman", "varus"/"valgus", "tricompartmental", "subchondral", "osteophytes", "acetabular", "G7 OsseoTi", "Z1 stem", "Oxford UKA", "Eliquis", "Xarelto", "Mounjaro").${librarySnippet}
 
 Current Selected Module: "${moduleType}"
 
@@ -4302,7 +4391,77 @@ Dictation:
       }
     }
 
-    // --- Orthopedic & Medical Speech Phonetic Lexicon Auto-Corrector (110+ Terms + User Dictionary) ---
+    // --- Dragon / Doximity-Style Medical, Surgical & Orthopaedic Vocabulary Library Engine ---
+    const BUILTIN_ORTHO_LIBRARY_PACKS = {
+      "Arthroplasty & Procedures": [
+        "Total Knee Arthroplasty", "Left Total Knee Arthroplasty", "Right Total Knee Arthroplasty", "Bilateral Total Knee Arthroplasty",
+        "Total Hip Arthroplasty", "Left Total Hip Arthroplasty", "Right Total Hip Arthroplasty", "Bilateral Total Hip Arthroplasty",
+        "Unicompartmental Knee Arthroplasty", "Direct Anterior Total Hip Arthroplasty", "Revision Total Knee Arthroplasty", "Revision Total Hip Arthroplasty",
+        "Bipolar Hemiarthroplasty", "Stage 1 Explantation and Antibiotic Spacer", "Stage 2 Reimplantation", "DAIR (Debridement, Antibiotics, and Implant Retention)",
+        "Polyethylene Liner Exchange", "Manipulation Under Anesthesia (MUA)", "Arthrocentesis", "Synovectomy", "Chondroplasty", "Patelloplasty",
+        "Lateral Retinacular Release", "Open Reduction Internal Fixation (ORIF)", "Cephalomedullary Nail", "Intramedullary Nailing", "Percutaneous Pinning",
+        "Arthrodesis", "High Tibial Osteotomy", "Distal Femoral Osteotomy", "Periacetabular Osteotomy", "Meniscectomy", "Meniscal Repair",
+        "ACL Reconstruction", "PCL Reconstruction", "MPFL Reconstruction", "Quadriceps Tendon Repair", "Patellar Tendon Repair",
+        "Rotator Cuff Repair", "Subacromial Decompression", "Acromioplasty", "Distal Clavicle Excision", "Biceps Tenodesis", "Labral Repair",
+        "Bankart Repair", "Reverse Total Shoulder Arthroplasty", "Anatomic Total Shoulder Arthroplasty", "Carpal Tunnel Release", "Cubital Tunnel Release",
+        "Trigger Finger Release", "De Quervain Release", "Dupuytren Fasciectomy", "Fasciotomy", "Irrigation and Debridement (I&D)", "Hardware Removal"
+      ],
+      "Physical Exam & Wound": [
+        "pitting edema", "non-pitting edema", "trace edema", "ecchymosis", "erythema", "dehiscence", "wound dehiscence", "induration",
+        "serosanguinous drainage", "purulent drainage", "fluctuance", "crepitus", "effusion", "ballottable effusion", "hemarthrosis", "synovitis",
+        "joint line tenderness", "pes anserine bursitis", "pes anserine", "iliotibial band", "greater trochanteric bursitis", "Baker's cyst",
+        "popliteal cyst", "extensor lag", "flexion contracture", "genu varum", "genu valgum", "genu recurvatum", "varus thrust", "antalgic gait",
+        "Trendelenburg gait", "Trendelenburg sign", "Stinchfield test", "FADIR test", "FABER test", "Ober test", "Thomas test", "Ely test",
+        "Lachman test", "Pivot shift", "Anterior drawer", "Posterior drawer", "McMurray test", "Thessaly test", "Apley grind test",
+        "Valgus stress", "Varus stress", "Dial test", "Patellar apprehension", "J-sign", "Clarke's sign", "Thompson test", "Homan's sign",
+        "Tinel's sign", "Phalen's test", "Durkan's compression test", "Spurling's test", "Hoffmann's sign", "Hawkins-Kennedy", "Neer impingement",
+        "Empty can test", "Lift-off test", "Belly-press test", "Speed's test", "Yergason's test", "O'Brien's test", "dorsalis pedis",
+        "posterior tibial", "capillary refill", "neurovascularly intact", "sensation intact to light touch (SILT)", "extensor hallucis longus (EHL)",
+        "flexor hallucis longus (FHL)", "tibialis anterior (TA)", "gastrocnemius", "quadriceps strength", "abductor strength", "deltoid",
+        "supraspinatus", "infraspinatus", "subscapularis", "teres minor", "plantar fasciitis", "hallux valgus", "hallux rigidus", "Dupuytren's contracture"
+      ],
+      "Imaging & Classifications": [
+        "Kellgren-Lawrence Grade", "KL-4", "tricompartmental osteoarthritis", "unicompartmental osteoarthritis", "medial compartment osteoarthritis",
+        "lateral compartment osteoarthritis", "patellofemoral osteoarthritis", "tibiofemoral", "joint space narrowing", "bone-on-bone",
+        "subchondral sclerosis", "subchondral cyst", "osteophytosis", "marginal osteophytes", "chondrocalcinosis", "avascular necrosis (AVN)",
+        "osteonecrosis", "subchondral collapse", "crescent sign", "radiolucency", "periprosthetic radiolucency", "osteolysis", "polyethylene wear",
+        "aseptic loosening", "subsidence", "pedestal sign", "spot welding", "stress shielding", "varus malalignment", "valgus malalignment",
+        "patella baja", "patella alta", "heterotopic ossification", "spondylolisthesis", "Brooker classification", "Paprosky classification",
+        "Vancouver classification", "Dorr Type A", "Dorr Type B", "Dorr Type C", "Garden IV", "Pauwels classification", "Schatzker classification",
+        "Neer classification", "Rockwood classification", "Weber classification", "Lauge-Hansen", "Gustilo-Anderson", "Outerbridge grade", "Tonnis grade",
+        "Rosenberg view", "sunrise view", "Merchant view", "mortise view", "frog-leg lateral", "cross-table lateral", "Judet views", "inlet and outlet views",
+        "standing long-leg alignment view", "marker ball templating"
+      ],
+      "Implants & Closures": [
+        "Zimmer Biomet", "Persona CR", "Persona PS", "Persona MC", "Persona CPS", "Persona Revision", "Oxford UKA", "Vanguard", "NexGen LCCK",
+        "NexGen Rotating Hinge (RHK)", "G7 Cup", "OsseoTi", "Taperloc Complete", "Avenir Complete", "Z1 Stem", "Arcos Stem", "Trabecular Metal Cone",
+        "Vivacit-E Polyethylene", "Biolox Delta Ceramic", "Stryker Triathlon", "Mako Robotic", "Accolade II", "Trident II", "Insignia Stem",
+        "Restoration Modular", "Gamma4", "TFNA", "DePuy Attune", "PFC Sigma", "Corail Stem", "Actis Stem", "Pinnacle Cup", "Smith & Nephew Legion",
+        "Journey II", "Oxinium", "Polar3 Dual Mobility", "Synthes LCP", "TightRope", "SwiveLock", "FiberWire", "FiberTape", "Stratafix",
+        "Vicryl", "Monocryl", "PDS II", "Ethibond", "Prineo", "Dermabond", "Prevena", "PICO Negative Pressure", "Aquacel Ag", "Mepilex",
+        "Sylke", "Steri-Strips", "Xeroform", "Webril", "ACE wrap"
+      ],
+      "Medications & Blocks": [
+        "tranexamic acid (TXA)", "Cefazolin (Ancef)", "Vancomycin", "Tobramycin", "Gentamicin", "Cefuroxime", "Clindamycin", "Exparel",
+        "Bupivacaine (Marcaine)", "Ropivacaine", "Lidocaine", "Adductor canal block", "IPACK block", "Periarticular injection", "Spinal anesthesia",
+        "Ketorolac (Toradol)", "Meloxicam", "Celecoxib (Celebrex)", "Indomethacin", "Diclofenac (Voltaren)", "Ibuprofen", "Naproxen",
+        "Acetaminophen (Tylenol)", "Oxycodone", "Hydrocodone-Acetaminophen (Norco)", "Tramadol", "Hydromorphone (Dilaudid)", "Gabapentin",
+        "Pregabalin (Lyrica)", "Methocarbamol (Robaxin)", "Cyclobenzaprine (Flexeril)", "Aspirin 81mg BID", "Eliquis", "Xarelto",
+        "Lovenox (enoxaparin)", "Coumadin (warfarin)", "Plavix", "Pradaxa", "Kenalog", "Depo-Medrol", "Celestone", "Zilretta",
+        "Synvisc-One", "Euflexxa", "Monovisc", "Orthovisc", "Durolane", "Mounjaro", "Zepbound", "Ozempic", "Wegovy", "Trulicity",
+        "Pantoprazole (Protonix)", "Ondansetron (Zofran)", "Senna-Docusate", "Mupirocin", "Hibiclens", "ChloraPrep", "Betadine"
+      ],
+      "Comorbidities & Labs": [
+        "coronary artery disease", "atrial fibrillation", "congestive heart failure", "pacemaker", "defibrillator (AICD)", "deep vein thrombosis (DVT)",
+        "pulmonary embolism (PE)", "chronic kidney disease", "hemodialysis", "diabetes mellitus", "hemoglobin A1c", "morbid obesity",
+        "body mass index (BMI)", "obstructive sleep apnea", "rheumatoid arthritis", "psoriatic arthritis", "gout", "pseudogout", "osteopenia",
+        "osteoporosis", "peripheral neuropathy", "lumbar radiculopathy", "spinal stenosis", "peripheral vascular disease", "lymphedema",
+        "venous stasis", "cellulitis", "MRSA", "MSSA", "Staphylococcus epidermidis", "Cutibacterium acnes", "alpha-defensin", "synovial CRP",
+        "erythrocyte sedimentation rate (ESR)", "C-reactive protein (CRP)", "synovial WBC", "polymorphonuclear percentage (PMN%)",
+        "dental clearance", "cardiology clearance", "hematology clearance", "nephrology clearance", "endocrinology clearance", "urine cotinine"
+      ]
+    };
+
     const BUILTIN_ORTHO_PHONETIC_RULES = [
       // Implants, Sutures & Dressings
       [/\b(?:strata\s*fix|stratified\s+suture|strada\s*fix|stratofix)\b/gi, "Stratafix"],
@@ -4322,6 +4481,11 @@ Dictation:
       [/\b(?:oxford\s+u\s*k\s*a|oxford\s+partial)\b/gi, "Oxford UKA"],
       [/\b(?:gamma\s+four|gamma\s+4)\b/gi, "Gamma4"],
       [/\b(?:t\s*f\s*n\s*a|t\s*f\s*n\s+a)\b/gi, "TFNA"],
+      [/\b(?:depuy\s+a\s+tune|de\s+puy\s+attune|depuy\s+attune)\b/gi, "DePuy Attune"],
+      [/\b(?:stryker\s+try\s+athlon|stryker\s+triathlon)\b/gi, "Stryker Triathlon"],
+      [/\b(?:taper\s+lock|taperloc)\b/gi, "Taperloc"],
+      [/\b(?:fiber\s+wire|fibre\s+wire)\b/gi, "FiberWire"],
+      [/\b(?:derma\s*bond|dermabond)\b/gi, "Dermabond"],
       // Arthroplasty & Trauma Acronyms / Procedures (Preserve full procedure names cleanly)
       [/\b(?:arthro\s*plast(?:y|ic|ies)?|artho\s*plasty|ortho\s*plasty|author\s*plasty|arturo\s*plasty)\b/gi, "arthroplasty"],
       [/\b(?:left|l)\s+total\s+knee\s+(?:arthroplasty|replacement)\b/gi, "Left Total Knee Arthroplasty"],
@@ -4333,6 +4497,14 @@ Dictation:
       [/\btotal\s+knee\s+(?:arthroplasty|replacement)\b/gi, "Total Knee Arthroplasty"],
       [/\btotal\s+hip\s+(?:arthroplasty|replacement)\b/gi, "Total Hip Arthroplasty"],
       [/\b(?:unicompartmental\s+knee\s+arthroplasty|partial\s+knee\s+replacement)\b/gi, "Unicompartmental Knee Arthroplasty"],
+      [/\b(?:hemi\s+arthroplasty|hemiarthroplasty)\b/gi, "hemiarthroplasty"],
+      [/\b(?:men\s+is\s+ectomy|menisectomy|meniscectomy)\b/gi, "meniscectomy"],
+      [/\b(?:acromio\s+plasty|acromioplasty)\b/gi, "acromioplasty"],
+      [/\b(?:teno\s+desis|tenodesis|tendon\s+desis)\b/gi, "tenodesis"],
+      [/\b(?:fashy\s+otomy|fashionable\s+me|fasciotomy)\b/gi, "fasciotomy"],
+      [/\b(?:the\s+breed\s+ment|de\s+breed\s+ment|debridement)\b/gi, "debridement"],
+      [/\b(?:arthro\s+desis|arthrodesis)\b/gi, "arthrodesis"],
+      [/\b(?:osteo\s+tomy|osteotomy)\b/gi, "osteotomy"],
       [/\b(?:t\s*h\s*a)\b/gi, "THA"],
       [/\b(?:t\s*k\s*a)\b/gi, "TKA"],
       [/\b(?:u\s*k\s*a)\b/gi, "UKA"],
@@ -4355,15 +4527,42 @@ Dictation:
       [/\b(?:rosen\s*burg|rosenberg\s+view)\b/gi, "Rosenberg view"],
       [/\b(?:gustilo\s+anderson|castillo\s+anderson)\b/gi, "Gustilo-Anderson"],
       [/\b(?:garden\s+four|garden\s+4)\b/gi, "Garden IV"],
+      [/\b(?:shats\s*ker|schatzker)\b/gi, "Schatzker"],
+      [/\b(?:puh\s*prosky|paprosky)\b/gi, "Paprosky"],
+      [/\b(?:dupuytren'?s?\s+contractor|dupuytren'?s?\s+contracture|dupuytrens)\b/gi, "Dupuytren's contracture"],
+      [/\b(?:decker\s+vain'?s?|de\s+quervain'?s?)\b/gi, "De Quervain's"],
+      [/\b(?:hawkins\s+kennedy)\b/gi, "Hawkins-Kennedy"],
+      [/\b(?:spurling'?s?\s+test|spurlings)\b/gi, "Spurling's test"],
       // Anatomy, Physical Exam, Wound & Vascular Pathology (Consumer ASR Homophone Fixes)
-      [/\b(?:putting\s+an?\s+e-?mail|putting\s+e-?mail|petting\s+a\s+demon|pitting\s+a\s+demon|fitting\s+edema|putting\s+edema|hitting\s+edema|pitting\s+uh\s+dima|pitting\s+adeema)\b/gi, "pitting edema"],
-      [/\b(?:non\s+putting\s+an?\s+e-?mail|non\s+putting\s+edema|non\s+fitting\s+edema)\b/gi, "non-pitting edema"],
+      [/\b(?:putting\s+an?\s+e-?mail|putting\s+e-?mail|petting\s+a\s+demon|pitting\s+a\s+demon|fitting\s+edema|putting\s+edema|hitting\s+edema|pitting\s+uh\s+dima|pitting\s+adeema|pitting\s+a\s+dema)\b/gi, "pitting edema"],
+      [/\b(?:non\s+putting\s+an?\s+e-?mail|non\s+putting\s+edema|non\s+fitting\s+edema|non\s+pitting\s+uh\s+dima)\b/gi, "non-pitting edema"],
       [/\b(?:uh\s+dima|adeema|a\s+dema|edima)\b/gi, "edema"],
       [/\b(?:echo\s*moses|ekimosis|echymosis|ecchymoses|icky\s+mosis)\b/gi, "ecchymosis"],
       [/\b(?:air\s+uh\s+thema|era\s+thema|erythematous|air\s+a\s+theme\s+uh)\b/gi, "erythema"],
       [/\b(?:dee\s+his\s+sense|dehiscent|dehiscense|the\s+hiss\s+ence)\b/gi, "dehiscence"],
       [/\b(?:in\s+duration|enduration)\b/gi, "induration"],
       [/\b(?:zero\s+sanguinous|sarah\s+sanguinous|sero\s+sanguinous)\b/gi, "serosanguinous"],
+      [/\b(?:pure\s+you\s+lent|purulent\s+drainage)\b/gi, "purulent drainage"],
+      [/\b(?:fluctuant|fluctuance)\b/gi, "fluctuance"],
+      [/\b(?:ba\s+lot\s+able|ballot\s+able|ballottable)\b/gi, "ballottable"],
+      [/\b(?:him\s+arthrosis|heme\s+arthrosis|hemarthrosis)\b/gi, "hemarthrosis"],
+      [/\b(?:baker'?s?\s+assist|bakers\s+cyst|baker'?s\s+cyst)\b/gi, "Baker's cyst"],
+      [/\b(?:pes\s+answering|pez\s+answering|pes\s+anserinus|pes\s+anserine)\b/gi, "pes anserine"],
+      [/\b(?:ilio\s+tibial|i\s*t\s+band)\b/gi, "iliotibial band"],
+      [/\b(?:trochanteric\s+her\s+site\s+is|trochanteric\s+bursitis)\b/gi, "trochanteric bursitis"],
+      [/\b(?:planter\s+fasciitis|plantar\s+fashy\s+itis|plantar\s+fasciitis)\b/gi, "plantar fasciitis"],
+      [/\b(?:halex\s+valgus|hallux\s+valgus)\b/gi, "hallux valgus"],
+      [/\b(?:halex\s+rigidus|hallux\s+rigidus)\b/gi, "hallux rigidus"],
+      [/\b(?:patella\s+baha|patella\s+baja)\b/gi, "patella baja"],
+      [/\b(?:patella\s+alta)\b/gi, "patella alta"],
+      [/\b(?:jenny\s+varum|genu\s+varum)\b/gi, "genu varum"],
+      [/\b(?:jenny\s+valgum|genu\s+valgum)\b/gi, "genu valgum"],
+      [/\b(?:jenny\s+recurvatum|genu\s+recurvatum|recurvatum)\b/gi, "recurvatum"],
+      [/\b(?:condo\s+calcinosis|chondro\s+calcinosis|chondrocalcinosis)\b/gi, "chondrocalcinosis"],
+      [/\b(?:spondylo\s+listhesis|spondylolisthesis)\b/gi, "spondylolisthesis"],
+      [/\b(?:ridiculous\s+pathy|radiculo\s+pathy|radiculopathy)\b/gi, "radiculopathy"],
+      [/\b(?:hetero\s+topic\s+ossification|heterotopic\s+ossification)\b/gi, "heterotopic ossification"],
+      [/\b(?:a\s+septic\s+loosening|aseptic\s+listening|aseptic\s+loosening)\b/gi, "aseptic loosening"],
       [/\b(?:home\s+in\s+sign|homans\s+sign|home\s+and\s+sign)\b/gi, "Homan's sign"],
       [/\b(?:a\s+fusion|efusion)\b/gi, "effusion"],
       [/\b(?:radio\s+lucency|radio\s+lucencies|radiolucencies)\b/gi, "radiolucency"],
@@ -4393,6 +4592,12 @@ Dictation:
       [/\b(?:peri\s+prosthetic|periprosthetic)\b/gi, "periprosthetic"],
       [/\b(?:supraclavicular|supra\s+clavicular)\b/gi, "supraclavicular"],
       // Medications & Injections
+      [/\b(?:tran\s+examic\s+acid|tranexamic\s+acid|t\s*x\s*a)\b/gi, "tranexamic acid (TXA)"],
+      [/\b(?:and\s+sef|an\s+cef|ancef|cefazolin)\b/gi, "Cefazolin (Ancef)"],
+      [/\b(?:ex\s+parel|expert\s+l|exparel)\b/gi, "Exparel"],
+      [/\b(?:meloxihcam|meloxicam|mobic)\b/gi, "Meloxicam"],
+      [/\b(?:sell\s+a\s+brex|celebrex|celecoxib)\b/gi, "Celecoxib (Celebrex)"],
+      [/\b(?:tore\s+a\s+doll|toradol|ketorolac)\b/gi, "Ketorolac (Toradol)"],
       [/\b(?:eloquist|ela\s*quiz|eliquis)\b/gi, "Eliquis"],
       [/\b(?:zarelto|zerelto|xarelto)\b/gi, "Xarelto"],
       [/\b(?:plavicks|plavix)\b/gi, "Plavix"],
@@ -4412,19 +4617,493 @@ Dictation:
       return safeParseJson(localStorage.getItem("orthoflow_custom_ortho_terms"), []);
     }
 
-    function promptAddCustomOrthoTerm() {
-      const wrongPhrase = prompt("Enter the word/phrase that speech recognition mishears (e.g. 'zimmer persona'):");
-      if (!wrongPhrase || !wrongPhrase.trim()) return;
-      const rightPhrase = prompt(`What should "${wrongPhrase.trim()}" automatically become? (e.g. 'Zimmer Biomet Persona CR'):`);
-      if (!rightPhrase || !rightPhrase.trim()) return;
-      const list = getCustomOrthoTerms();
-      list.push({ wrong: wrongPhrase.trim(), right: rightPhrase.trim() });
-      safeSetLocalStorage("orthoflow_custom_ortho_terms", JSON.stringify(list));
-      const box = document.getElementById("focusModalTranscript");
-      if (box && box.value) {
-        box.value = normalizeOrthopedicSpeech(box.value);
-        syncTranscriptFromFocusModal(box.value);
+    function getUploadedVocabTerms() {
+      return safeParseJson(localStorage.getItem("orthoflow_uploaded_vocab_terms"), []);
+    }
+
+    function saveUploadedVocabTerms(list) {
+      safeSetLocalStorage("orthoflow_uploaded_vocab_terms", JSON.stringify(list));
+      rebuildOrthoPhoneticSkeletonIndex();
+      updateOrthoLibraryCountBadges();
+    }
+
+    function computeOrthoPhoneticSkeleton(phrase) {
+      if (!phrase) return "";
+      return String(phrase)
+        .toLowerCase()
+        .replace(/\([^)]*\)/g, " ")
+        .replace(/[^a-z0-9\s]/g, " ")
+        .replace(/\b(?:a|an|the|of|to)\b/g, " ")
+        .replace(/ph/g, "f")
+        .replace(/ch/g, "k")
+        .replace(/ck/g, "k")
+        .replace(/c(?=[eiy])/g, "s")
+        .replace(/c/g, "k")
+        .replace(/qu/g, "kw")
+        .replace(/x/g, "ks")
+        .replace(/gh/g, "g")
+        .split(/\s+/)
+        .filter(Boolean)
+        .map(word => {
+          const first = word[0];
+          const rest = word.slice(1).replace(/[aeiouy]/g, "");
+          return (first + rest).replace(/(.)\1+/g, "$1");
+        })
+        .join("");
+    }
+
+    function editDistanceShort(a, b) {
+      if (a === b) return 0;
+      const la = a.length;
+      const lb = b.length;
+      if (Math.abs(la - lb) > 2) return 99;
+      const dp = Array.from({ length: la + 1 }, (_, i) => i);
+      for (let j = 1; j <= lb; j++) {
+        let prev = dp[0];
+        dp[0] = j;
+        for (let i = 1; i <= la; i++) {
+          const temp = dp[i];
+          dp[i] = a[i - 1] === b[j - 1]
+            ? prev
+            : 1 + Math.min(prev, dp[i], dp[i - 1]);
+          prev = temp;
+        }
       }
+      return dp[la];
+    }
+
+    let cachedPhoneticSkeletonIndex = null;
+    function rebuildOrthoPhoneticSkeletonIndex() {
+      const index = [];
+      const seen = new Set();
+      const addTermToIndex = (rawTerm) => {
+        if (!rawTerm) return;
+        const cleanDisplay = String(rawTerm).trim();
+        const basePhrase = cleanDisplay.replace(/\s*\([^)]*\)\s*/g, "").trim();
+        const words = basePhrase.split(/\s+/).filter(Boolean);
+        if (words.length < 2 || words.length > 4) return;
+        const lower = basePhrase.toLowerCase();
+        if (seen.has(lower)) return;
+        seen.add(lower);
+        const skel = computeOrthoPhoneticSkeleton(basePhrase);
+        if (skel.length < 7) return;
+        index.push({
+          term: cleanDisplay,
+          baseLower: lower,
+          wordCount: words.length,
+          firstChar: skel[0],
+          skeleton: skel
+        });
+      };
+
+      Object.values(BUILTIN_ORTHO_LIBRARY_PACKS).forEach(arr => arr.forEach(addTermToIndex));
+      getUploadedVocabTerms().forEach(item => addTermToIndex(item && item.term ? item.term : item));
+      cachedPhoneticSkeletonIndex = index;
+      return index;
+    }
+
+    function applyLibraryPhoneticFuzzyMatch(text) {
+      if (!text) return "";
+      const index = cachedPhoneticSkeletonIndex || rebuildOrthoPhoneticSkeletonIndex();
+      if (!index || index.length === 0) return text;
+      const tokens = String(text).split(/(\s+)/);
+      // Extract word positions inside tokens array
+      const wordIndices = [];
+      for (let i = 0; i < tokens.length; i++) {
+        if (/\S/.test(tokens[i])) wordIndices.push(i);
+      }
+      if (wordIndices.length < 2) return text;
+
+      for (let w = 0; w < wordIndices.length - 1; w++) {
+        for (const winLen of [3, 2]) {
+          if (w + winLen > wordIndices.length) continue;
+          const startTokIdx = wordIndices[w];
+          const endTokIdx = wordIndices[w + winLen - 1];
+          const spanText = tokens.slice(startTokIdx, endTokIdx + 1).join("");
+          // Skip spans containing numbers or punctuation boundaries
+          if (/[\d.,;:!?()/]/.test(spanText)) continue;
+          const spanLower = spanText.toLowerCase().trim();
+          const spanSkel = computeOrthoPhoneticSkeleton(spanLower);
+          if (spanSkel.length < 7) continue;
+
+          let bestMatch = null;
+          let bestDist = 99;
+          for (const entry of index) {
+            if (entry.firstChar !== spanSkel[0]) continue;
+            if (Math.abs(entry.skeleton.length - spanSkel.length) > 1) continue;
+            if (entry.baseLower === spanLower) {
+              bestMatch = null;
+              break;
+            }
+            const dist = editDistanceShort(spanSkel, entry.skeleton);
+            const maxAllowed = entry.skeleton.length >= 11 ? 2 : 1;
+            if (dist <= maxAllowed && dist < bestDist) {
+              bestDist = dist;
+              bestMatch = entry;
+            }
+          }
+          if (bestMatch) {
+            tokens[startTokIdx] = bestMatch.term;
+            for (let k = startTokIdx + 1; k <= endTokIdx; k++) {
+              tokens[k] = "";
+            }
+            w += winLen - 1;
+            break;
+          }
+        }
+      }
+      return tokens.join("");
+    }
+
+    function getActiveOrthoLibraryPromptSnippet() {
+      const customRules = getCustomOrthoTerms();
+      const uploadedTerms = getUploadedVocabTerms();
+      const customRulesStr = customRules.length > 0
+        ? `\nCustom Surgeon Phonetic Rules: ${customRules.slice(0, 80).map(r => `"${r.wrong}" -> "${r.right}"`).join("; ")}`
+        : "";
+      const uploadedStr = uploadedTerms.length > 0
+        ? `\nCustom Uploaded Surgical Vocabulary: ${uploadedTerms.slice(0, 150).map(t => t.term || t).join(", ")}`
+        : "";
+      return `\nACTIVE ORTHOPAEDIC & SURGICAL VOCABULARY LIBRARY (Use these exact canonical medical/orthopaedic terms when transcribing audio or correcting phonetic speech recognition errors):
+- Arthroplasty & Procedures: Total Knee Arthroplasty (TKA), Total Hip Arthroplasty (THA), Unicompartmental Knee Arthroplasty (UKA), Direct Anterior THA, Revision TKA/THA, Hemiarthroplasty, Stage 1 Explantation & Antibiotic Spacer, DAIR, MUA, Arthrocentesis, Synovectomy, ORIF, Cephalomedullary Nail, Meniscectomy, Rotator Cuff Repair, Acromioplasty, Tenodesis, Fasciotomy, Debridement.
+- Physical Exam & Wound: pitting edema, non-pitting edema, ecchymosis, erythema, dehiscence, induration, serosanguinous, purulent, fluctuance, crepitus, ballottable effusion, hemarthrosis, pes anserine, iliotibial band, Baker's cyst, extensor lag, flexion contracture, genu varum/valgum/recurvatum, antalgic gait, Trendelenburg, Stinchfield, FADIR, FABER, Lachman, McMurray, Homan's sign, dorsalis pedis, posterior tibial, neurovascularly intact, SILT, EHL, FHL, TA, gastrocnemius, Dupuytren's contracture, plantar fasciitis, hallux valgus/rigidus.
+- Imaging & Classifications: Kellgren-Lawrence (KL-4), tricompartmental/unicompartmental/patellofemoral OA, joint space narrowing, bone-on-bone, subchondral sclerosis/cysts, osteophytes, chondrocalcinosis, avascular necrosis (AVN), radiolucency, osteolysis, subsidence, aseptic loosening, heterotopic ossification, spondylolisthesis, patella baja/alta, Brooker, Paprosky, Dorr, Garden, Schatzker, Gustilo-Anderson, Rosenberg view, sunrise/Merchant view, mortise view, frog-leg lateral, Judet views.
+- Implants, Closures & Meds: Zimmer Biomet Persona CR/PS/MC/Revision, Oxford UKA, G7 OsseoTi, Taperloc, Z1 Stem, Arcos, Stryker Triathlon, Mako, Accolade II, Gamma4, TFNA, DePuy Attune, Corail, Stratafix, Prineo, Prevena, Aquacel Ag, Mepilex, Sylke, TXA, Cefazolin (Ancef), Vancomycin, Tobramycin, Exparel, Bupivacaine (Marcaine), Meloxicam, Celebrex, Toradol, Eliquis, Xarelto, Plavix, Kenalog, Depo-Medrol, Mounjaro, Zepbound, Ozempic, Wegovy.${customRulesStr}${uploadedStr}`;
+    }
+
+    function getTotalOrthoLibraryCount() {
+      const builtinTermsCount = Object.values(BUILTIN_ORTHO_LIBRARY_PACKS).reduce((acc, arr) => acc + arr.length, 0);
+      const customRulesCount = getCustomOrthoTerms().length;
+      const uploadedCount = getUploadedVocabTerms().length;
+      return {
+        builtinTermsCount,
+        phoneticRulesCount: BUILTIN_ORTHO_PHONETIC_RULES.length + customRulesCount,
+        customCount: customRulesCount + uploadedCount,
+        total: builtinTermsCount + BUILTIN_ORTHO_PHONETIC_RULES.length + customRulesCount + uploadedCount
+      };
+    }
+
+    function updateOrthoLibraryCountBadges() {
+      const stats = getTotalOrthoLibraryCount();
+      const modalBadge = document.getElementById("orthoLibraryTotalBadge");
+      if (modalBadge) {
+        modalBadge.innerText = `${stats.total} Active Entries (${stats.customCount} Custom)`;
+      }
+      const focusLabel = document.getElementById("focusModalLibraryCountLabel");
+      if (focusLabel) {
+        focusLabel.innerText = `✓ ${stats.total} Medical, Surgical & Ortho Library Entries Active`;
+      }
+    }
+
+    function toggleOrthoLibraryModal() {
+      const modal = document.getElementById("orthoLibraryModal");
+      if (!modal) return;
+      if (modal.classList.contains("hidden")) {
+        updateOrthoLibraryCountBadges();
+        renderOrthoLibraryModalList();
+        modal.classList.remove("hidden");
+      } else {
+        modal.classList.add("hidden");
+      }
+    }
+
+    function parseAndIngestOrthoLibraryLines(rawLines, defaultCategory = "Custom / Uploaded") {
+      const customRules = getCustomOrthoTerms();
+      const uploadedTerms = getUploadedVocabTerms();
+      let addedRules = 0;
+      let addedTerms = 0;
+
+      for (const rawLine of rawLines) {
+        const line = String(rawLine || "").trim();
+        if (!line || line.startsWith("#") || line.startsWith("//")) continue;
+
+        // 1. Check "wrong => right" or "wrong -> right" format
+        if (line.includes("=>") || line.includes("->")) {
+          const parts = line.split(/=>|->/);
+          const wrong = (parts[0] || "").trim();
+          const right = (parts.slice(1).join(" ") || "").trim();
+          if (wrong && right) {
+            if (!customRules.some(r => r.wrong.toLowerCase() === wrong.toLowerCase())) {
+              customRules.push({ wrong, right, category: defaultCategory });
+              addedRules++;
+            }
+          }
+          continue;
+        }
+
+        // 2. Check Dragon Medical exported format "Written Form\\Spoken Form"
+        if (line.includes("\\")) {
+          const parts = line.split("\\");
+          const written = (parts[0] || "").trim();
+          const spoken = (parts[1] || "").trim();
+          if (written && spoken && written.toLowerCase() !== spoken.toLowerCase()) {
+            if (!customRules.some(r => r.wrong.toLowerCase() === spoken.toLowerCase())) {
+              customRules.push({ wrong: spoken, right: written, category: defaultCategory });
+              addedRules++;
+            }
+          } else if (written) {
+            if (!uploadedTerms.some(t => (t.term || "").toLowerCase() === written.toLowerCase())) {
+              uploadedTerms.push({ term: written, category: defaultCategory });
+              addedTerms++;
+            }
+          }
+          continue;
+        }
+
+        // 3. Check 2-column CSV row (either "wrong,right" or "Term,Category")
+        if (line.includes(",")) {
+          const cols = line.split(",").map(s => s.replace(/^["']|["']$/g, "").trim()).filter(Boolean);
+          if (cols.length >= 2) {
+            const c0 = cols[0];
+            const c1 = cols[1];
+            if (/^(?:term|word|wrong|spoken)$/i.test(c0)) continue; // skip header row
+            if (BUILTIN_ORTHO_LIBRARY_PACKS[c1] || /custom|uploaded|arthroplasty|exam|imaging|implant|medication|comorbid/i.test(c1)) {
+              if (!uploadedTerms.some(t => (t.term || "").toLowerCase() === c0.toLowerCase())) {
+                uploadedTerms.push({ term: c0, category: c1 });
+                addedTerms++;
+              }
+            } else {
+              if (!customRules.some(r => r.wrong.toLowerCase() === c0.toLowerCase())) {
+                customRules.push({ wrong: c0, right: c1, category: defaultCategory });
+                addedRules++;
+              }
+            }
+            continue;
+          }
+        }
+
+        // 4. Plain canonical medical/orthopaedic term (1 per line)
+        const cleanTerm = line.replace(/^["']|["']$/g, "").trim();
+        if (cleanTerm) {
+          if (!uploadedTerms.some(t => (t.term || "").toLowerCase() === cleanTerm.toLowerCase())) {
+            uploadedTerms.push({ term: cleanTerm, category: defaultCategory });
+            addedTerms++;
+          }
+        }
+      }
+
+      safeSetLocalStorage("orthoflow_custom_ortho_terms", JSON.stringify(customRules));
+      saveUploadedVocabTerms(uploadedTerms);
+
+      // Re-run normalization on any active dictation text
+      const focusBox = document.getElementById("focusModalTranscript");
+      const mainBox = document.getElementById("dictationBox");
+      if (focusBox && focusBox.value) {
+        focusBox.value = normalizeOrthopedicSpeech(focusBox.value);
+        syncTranscriptFromFocusModal(focusBox.value);
+      } else if (mainBox && mainBox.value) {
+        mainBox.value = normalizeOrthopedicSpeech(mainBox.value);
+        autoSaveCurrentEncounter();
+        assembleNote();
+      }
+
+      renderOrthoLibraryModalList();
+      return { addedRules, addedTerms };
+    }
+
+    function addBulkTermsToOrthoLibrary() {
+      const input = document.getElementById("orthoLibraryBulkInput");
+      const catSelect = document.getElementById("orthoLibraryAddCategory");
+      if (!input || !input.value.trim()) {
+        alert("Paste 1 or more medical/orthopaedic terms or 'misheard => correct' rules first.");
+        return;
+      }
+      const category = catSelect ? catSelect.value : "Custom / Uploaded";
+      const lines = input.value.split(/\r?\n/);
+      const { addedRules, addedTerms } = parseAndIngestOrthoLibraryLines(lines, category);
+      input.value = "";
+      alert(`Added ${addedTerms} vocabulary term(s) and ${addedRules} phonetic auto-correction rule(s) to your active Orthopaedic Library ✓`);
+    }
+
+    function handleOrthoLibraryFileUpload(fileInput) {
+      if (!fileInput || !fileInput.files || !fileInput.files[0]) return;
+      const file = fileInput.files[0];
+      const catSelect = document.getElementById("orthoLibraryAddCategory");
+      const category = catSelect ? catSelect.value : "Custom / Uploaded";
+      const reader = new FileReader();
+
+      reader.onload = (e) => {
+        try {
+          const content = String(e.target.result || "");
+          if (file.name.toLowerCase().endsWith(".json")) {
+            const parsed = safeParseJson(content, null);
+            if (Array.isArray(parsed)) {
+              const lines = parsed.map(item => {
+                if (typeof item === "string") return item;
+                if (item && item.wrong && item.right) return `${item.wrong} => ${item.right}`;
+                if (item && item.term) return item.term;
+                return "";
+              });
+              const { addedRules, addedTerms } = parseAndIngestOrthoLibraryLines(lines, category);
+              alert(`Imported "${file.name}": +${addedTerms} terms and +${addedRules} phonetic rules added ✓`);
+            } else if (parsed && typeof parsed === "object") {
+              const lines = [];
+              if (Array.isArray(parsed.rules)) {
+                parsed.rules.forEach(r => { if (r.wrong && r.right) lines.push(`${r.wrong} => ${r.right}`); });
+              }
+              if (Array.isArray(parsed.terms)) {
+                parsed.terms.forEach(t => lines.push(typeof t === "string" ? t : (t.term || "")));
+              }
+              const { addedRules, addedTerms } = parseAndIngestOrthoLibraryLines(lines, category);
+              alert(`Imported "${file.name}": +${addedTerms} terms and +${addedRules} phonetic rules added ✓`);
+            }
+          } else {
+            const lines = content.split(/\r?\n/);
+            const { addedRules, addedTerms } = parseAndIngestOrthoLibraryLines(lines, category);
+            alert(`Imported "${file.name}": +${addedTerms} medical/orthopaedic terms and +${addedRules} phonetic rules added ✓`);
+          }
+        } catch (err) {
+          alert("Library Upload Error: " + err.message);
+        } finally {
+          fileInput.value = "";
+        }
+      };
+
+      reader.readAsText(file);
+    }
+
+    function exportOrthoVocabularyLibrary() {
+      const lines = [
+        "# OrthoFlow Medical, Surgical & Orthopaedic Vocabulary Library (Dragon & OrthoFlow Compatible)",
+        `# Exported: ${new Date().toISOString()}`,
+        ""
+      ];
+      lines.push("# --- CUSTOM PHONETIC AUTO-CORRECTION RULES (spoken => written) ---");
+      getCustomOrthoTerms().forEach(r => {
+        if (r && r.wrong && r.right) lines.push(`${r.wrong} => ${r.right}`);
+      });
+      lines.push("");
+      lines.push("# --- CUSTOM / UPLOADED VOCABULARY TERMS ---");
+      getUploadedVocabTerms().forEach(t => {
+        if (t && (t.term || typeof t === "string")) lines.push(t.term || t);
+      });
+      lines.push("");
+      Object.entries(BUILTIN_ORTHO_LIBRARY_PACKS).forEach(([cat, arr]) => {
+        lines.push(`# --- BUILT-IN: ${cat.toUpperCase()} ---`);
+        arr.forEach(term => lines.push(term));
+        lines.push("");
+      });
+
+      const blob = new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `OrthoFlow_Medical_Ortho_Library_${new Date().toISOString().split("T")[0]}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+    }
+
+    function deleteCustomOrthoRule(idx) {
+      const list = getCustomOrthoTerms();
+      if (idx >= 0 && idx < list.length) {
+        list.splice(idx, 1);
+        safeSetLocalStorage("orthoflow_custom_ortho_terms", JSON.stringify(list));
+        updateOrthoLibraryCountBadges();
+        renderOrthoLibraryModalList();
+      }
+    }
+
+    function deleteUploadedVocabTerm(idx) {
+      const list = getUploadedVocabTerms();
+      if (idx >= 0 && idx < list.length) {
+        list.splice(idx, 1);
+        saveUploadedVocabTerms(list);
+        renderOrthoLibraryModalList();
+      }
+    }
+
+    function renderOrthoLibraryModalList() {
+      const container = document.getElementById("orthoLibraryListContainer");
+      if (!container) return;
+      const filterCat = (document.getElementById("orthoLibraryFilterCategory") || {}).value || "ALL";
+      const query = ((document.getElementById("orthoLibrarySearchInput") || {}).value || "").trim().toLowerCase();
+
+      const itemsHtml = [];
+      const customRules = getCustomOrthoTerms();
+      const uploadedTerms = getUploadedVocabTerms();
+
+      // 1. Custom Phonetic Rules
+      if (filterCat === "ALL" || filterCat === "PHONETIC_RULES" || filterCat === "Custom / Uploaded") {
+        customRules.forEach((rule, idx) => {
+          const textMatch = `${rule.wrong} ${rule.right}`.toLowerCase();
+          if (query && !textMatch.includes(query)) return;
+          itemsHtml.push(`
+            <div class="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-emerald-950/30 border border-emerald-500/30 text-xs">
+              <div class="min-w-0">
+                <span class="text-amber-300 font-mono">"${escapeHtml(rule.wrong)}"</span>
+                <span class="text-slate-400 mx-1.5">→</span>
+                <span class="text-emerald-300 font-bold">"${escapeHtml(rule.right)}"</span>
+                <span class="ml-2 text-[10px] text-slate-400">[Custom Phonetic Rule]</span>
+              </div>
+              <button type="button" onclick="deleteCustomOrthoRule(${idx})" class="text-[10px] text-red-400 hover:text-red-300 font-bold shrink-0">✕</button>
+            </div>
+          `);
+        });
+      }
+
+      // 2. Custom / Uploaded Vocabulary Terms
+      if (filterCat === "ALL" || filterCat === "Custom / Uploaded") {
+        uploadedTerms.forEach((item, idx) => {
+          const termStr = item.term || String(item);
+          const catStr = item.category || "Custom / Uploaded";
+          if (query && !termStr.toLowerCase().includes(query) && !catStr.toLowerCase().includes(query)) return;
+          itemsHtml.push(`
+            <div class="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-indigo-950/30 border border-indigo-500/30 text-xs">
+              <div class="min-w-0">
+                <span class="text-white font-semibold">${escapeHtml(termStr)}</span>
+                <span class="ml-2 text-[10px] text-indigo-300">[${escapeHtml(catStr)}]</span>
+              </div>
+              <button type="button" onclick="deleteUploadedVocabTerm(${idx})" class="text-[10px] text-red-400 hover:text-red-300 font-bold shrink-0">✕</button>
+            </div>
+          `);
+        });
+      }
+
+      // 3. Built-In Phonetic Auto-Correction Rules
+      if (filterCat === "ALL" || filterCat === "PHONETIC_RULES") {
+        BUILTIN_ORTHO_PHONETIC_RULES.forEach(([regex, replacement]) => {
+          const pat = regex.source.replace(/\\b|\(\?:|\)|\\s\*|\\s\+/g, " ").trim();
+          if (query && !pat.toLowerCase().includes(query) && !replacement.toLowerCase().includes(query)) return;
+          itemsHtml.push(`
+            <div class="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-slate-900/90 border border-slate-800 text-xs">
+              <div class="min-w-0 truncate">
+                <span class="text-emerald-300 font-bold">${escapeHtml(replacement)}</span>
+                <span class="text-slate-500 mx-1.5">←</span>
+                <span class="text-[11px] text-slate-400 font-mono">${escapeHtml(pat)}</span>
+              </div>
+              <span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 shrink-0">Phonetic Rule</span>
+            </div>
+          `);
+        });
+      }
+
+      // 4. Built-In Specialty Vocabulary Packs
+      Object.entries(BUILTIN_ORTHO_LIBRARY_PACKS).forEach(([catName, terms]) => {
+        if (filterCat !== "ALL" && filterCat !== catName) return;
+        terms.forEach(term => {
+          if (query && !term.toLowerCase().includes(query) && !catName.toLowerCase().includes(query)) return;
+          itemsHtml.push(`
+            <div class="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-slate-900/60 border border-slate-800/80 text-xs">
+              <span class="text-slate-100 font-medium">${escapeHtml(term)}</span>
+              <span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-800/80 text-sky-300 shrink-0">${escapeHtml(catName)}</span>
+            </div>
+          `);
+        });
+      });
+
+      container.innerHTML = itemsHtml.length > 0
+        ? itemsHtml.join("")
+        : `<p class="text-xs text-slate-500 text-center py-6">No matching terms found. Paste or upload new terms above to add them.</p>`;
+    }
+
+    function promptAddCustomOrthoTerm() {
+      const wrongPhrase = prompt("Enter the word/phrase that speech recognition mishears (e.g. 'putting an email' or 'zimmer persona'):");
+      if (!wrongPhrase || !wrongPhrase.trim()) return;
+      const rightPhrase = prompt(`What should "${wrongPhrase.trim()}" automatically become? (e.g. 'pitting edema' or 'Zimmer Biomet Persona CR'):`);
+      if (!rightPhrase || !rightPhrase.trim()) return;
+      parseAndIngestOrthoLibraryLines([`${wrongPhrase.trim()} => ${rightPhrase.trim()}`], "Custom / Uploaded");
       alert(`Added Ortho speech fix: "${wrongPhrase.trim()}" → "${rightPhrase.trim()}" ✓`);
     }
 
@@ -4485,9 +5164,11 @@ Dictation:
     function normalizeOrthopedicSpeech(rawText) {
       if (!rawText) return "";
       let out = String(rawText);
+      // 1. Apply explicit phonetic regex rules
       for (const [regex, replacement] of BUILTIN_ORTHO_PHONETIC_RULES) {
         out = out.replace(regex, replacement);
       }
+      // 2. Apply custom user phonetic rules
       const customList = getCustomOrthoTerms();
       for (const item of customList) {
         if (item && item.wrong && item.right) {
@@ -4495,10 +5176,12 @@ Dictation:
           out = out.replace(new RegExp(`\\b${escaped}\\b`, "gi"), item.right);
         }
       }
-      // Format spoken degree numbers (e.g. "5 degrees" -> "5°", "0 to 110 degrees" -> "0° - 110°")
+      // 3. Apply multi-word phonetic skeleton fuzzy matching against the active Orthopaedic & Surgical Vocabulary Library
+      out = applyLibraryPhoneticFuzzyMatch(out);
+      // 4. Format spoken degree numbers (e.g. "5 degrees" -> "5°", "0 to 110 degrees" -> "0° - 110°")
       out = out.replace(/\b(\d{1,3})\s+to\s+(\d{1,3})\s+degrees\b/gi, "$1° - $2°");
       out = out.replace(/\b(\d{1,3})\s+degrees\b/gi, "$1°");
-      // Format spoken dates (e.g. "11 5" -> "11/5", "115" -> "11/5")
+      // 5. Format spoken dates (e.g. "11 5" -> "11/5", "115" -> "11/5")
       out = formatSpokenDatesInText(out);
       return out;
     }
@@ -4536,6 +5219,8 @@ Dictation:
       if (hybridToggle) {
         hybridToggle.checked = savedHybrid === null ? true : savedHybrid === "1";
       }
+      rebuildOrthoPhoneticSkeletonIndex();
+      updateOrthoLibraryCountBadges();
     }
 
     function restoreRawDictationText() {
