@@ -464,6 +464,10 @@
             <span id="voiceMicIcon">🎙️</span>
             <span id="voiceMicLabel">Dictate</span>
           </button>
+          <button type="button" onclick="startVoiceAddendumDictation()" id="voiceAddendumBtn" class="px-2.5 py-1.5 rounded-xl bg-teal-600/20 border border-teal-500/40 hover:bg-teal-600/35 text-xs font-semibold text-teal-200 flex items-center gap-1 transition-colors" title="Dictate a quick addendum or field update (e.g. 'Change ROM to 0 to 120 and return in 4 weeks') without overwriting existing note fields">
+            <span>➕</span>
+            <span>Addendum</span>
+          </button>
           <button type="button" onclick="pauseVoiceDictationWithoutParse()" id="voicePauseBtn" class="hidden px-2.5 py-1.5 rounded-xl bg-amber-600/25 border border-amber-500/50 hover:bg-amber-600/40 text-xs font-semibold text-amber-200 flex items-center gap-1 transition-colors" title="Pause microphone without running AI Parse yet so you can resume speaking or edit first">
             <span>⏸️</span>
             <span>Pause</span>
@@ -500,11 +504,18 @@
           <button type="button" onclick="unlockAndResyncNote()" class="text-[11px] text-blue-400 hover:text-blue-300 font-semibold">↻ Re-Sync Template</button>
         </div>
       </div>
+
+      <!-- Instant Extracted Cues Verification Strip & 1-Tap Missing-Detail Quick Chips -->
+      <div id="extractedCuesBar" class="bg-slate-950/90 border border-slate-800/90 rounded-xl p-2.5 flex flex-col gap-2"></div>
+
       <textarea id="noteOutput" oninput="onManualNoteEdit()" rows="11" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-slate-200 font-mono leading-relaxed focus:outline-none no-scrollbar"></textarea>
 
-      <div class="grid grid-cols-3 gap-2 mt-2">
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2">
         <button onclick="copyNote()" id="copyBtn" class="py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-xs font-semibold text-white active:bg-slate-700">
           Copy Note
+        </button>
+        <button onclick="copyNoteAndAdvance()" id="copyAndNextBtn" class="py-2.5 rounded-xl bg-emerald-600/25 border border-emerald-500/50 text-xs font-bold text-emerald-200 hover:bg-emerald-600/35 active:bg-emerald-600/45" title="Copy note to clipboard, mark encounter Exported ✓, and advance to the next patient (or fresh On-The-Fly note)">
+          📋 Copy &amp; Next →
         </button>
         <button onclick="shareToKeep()" class="py-2.5 rounded-xl bg-amber-600/20 border border-amber-500/40 text-xs font-semibold text-amber-300 active:bg-amber-600/30">
           Export Keep
@@ -3754,11 +3765,32 @@ Extract and return ONLY valid JSON matching:
     // --- Direct Gemini AI Dictation Parser (With Clause-Level HPI / PE / Imaging / Plan Splitter & Auto-Module Routing) ---
     function segmentDictationIntoClinicalClauses(text) {
       if (!text) return [];
-      // Browser voice recognition rarely inserts periods; inject clause breaks before clinical transition phrases
+      // Browser voice recognition rarely inserts periods; inject clause breaks before clinical transition phrases & spoken Dragon/Doximity section headers
       const withBreaks = String(text)
-        .replace(/\s+(?=(?:on\s+physical\s+exam|on\s+exam|physical\s+exam(?:ination)?|exam\s+shows|exam\s+demonstrates|incision\s+is|incision\s+looks|incision\s+clean|wound\s+is|wound\s+clean|no\s+pitting\s+edema|trace\s+pitting\s+edema|mild\s+pitting\s+edema|range\s+of\s+motion|rom\s+is|active\s+range|flexion\s+is|neurovascularly|distally\s+neurovascularly|x-?rays?\s+(?:show|demonstrate|reveal|today|obtained|reviewed)|radiographs?\s+(?:show|demonstrate|reveal|today|obtained|reviewed)|films?\s+(?:show|demonstrate)|imaging\s+(?:shows|demonstrates)|assessment\s+and\s+plan|plan\s+is|plan\s+for|we\s+will\s+continue|continue\s+physical\s+therapy|continue\s+pt\b|advance\s+weight\s+bearing|follow\s*-?\s*up\s+in|return\s+to\s+clinic|rtc\s+in))/gi, " | ")
+        .replace(/\s+(?=(?:subjective\s*:?|history\s+of\s+present\s+illness|hpi\s*:?|on\s+physical\s+exam|on\s+exam|physical\s+exam(?:ination)?|objective\s*:?|exam\s+shows|exam\s+demonstrates|incision\s+is|incision\s+looks|incision\s+clean|wound\s+is|wound\s+clean|no\s+pitting\s+edema|trace\s+pitting\s+edema|mild\s+pitting\s+edema|[1-4]\+\s+pitting\s+edema|pitting\s+edema|range\s+of\s+motion|rom\s+is|active\s+range|flexion\s+is|right\s+knee\s+(?:rom|range|exam)|left\s+knee\s+(?:rom|range|exam)|right\s+hip\s+(?:rom|range|exam)|left\s+hip\s+(?:rom|range|exam)|neurovascularly|distally\s+neurovascularly|x-?rays?\s+(?:show|demonstrate|reveal|today|obtained|reviewed)|radiographs?\s+(?:show|demonstrate|reveal|today|obtained|reviewed)|films?\s+(?:show|demonstrate)|imaging\s*[:=-]|imaging\s+(?:shows|demonstrates|reviewed)|radiographic\s+findings|assessment\s+and\s+plan|impression\s+and\s+plan|plan\s*[:=-]|plan\s+is|plan\s+for|we\s+will\s+continue|continue\s+physical\s+therapy|continue\s+pt\b|advance\s+weight\s+bearing|follow\s*-?\s*up\s+in|return\s+to\s+clinic|rtc\s+in))/gi, " | ")
         .replace(/(?:[.!?\n;]+|\s+-\s+|\s+\|\s+)/g, " | ");
       return withBreaks.split(" | ").map(s => s.trim()).filter(Boolean);
+    }
+
+    function detectKnownPatientFromDictation(text) {
+      if (!text) return null;
+      const lowerText = String(text).toLowerCase();
+      // 1. Check Surgical Case DB, Waitlist, and Today's Roster for any 2+ token patient name spoken in dictation
+      const candidateNames = [];
+      getSurgicalCases().forEach(c => { if (c && c.patientName) candidateNames.push({ name: c.patientName, ageGender: c.ageGender }); });
+      getSurgeryWaitlist().forEach(w => { if (w && w.patientName) candidateNames.push({ name: w.patientName, ageGender: w.ageGender }); });
+      getClinicEncounters(currentClinicDate).forEach(e => { if (e && e.name) candidateNames.push({ name: e.name, ageGender: e.ageGender }); });
+
+      for (const cand of candidateNames) {
+        const tokens = normalizeNameTokens(cand.name);
+        if (tokens.length >= 2) {
+          const allPresent = tokens.every(tok => tok.length >= 2 && new RegExp(`\\b${tok.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(lowerText));
+          if (allPresent) {
+            return cand;
+          }
+        }
+      }
+      return null;
     }
 
     function extractLocalClinicalCues(rawText) {
@@ -3767,12 +3799,16 @@ Extract and return ONLY valid JSON matching:
       if (!text) return {};
       const cues = {};
 
-      // Extract spoken patient name if dictated on-the-fly (e.g., "Patient: Smith, John." or "John Smith is a 69yo M")
+      // Extract spoken patient name if dictated on-the-fly OR matched against Surgical Case DB / Waitlist / Roster
+      const knownMatch = detectKnownPatientFromDictation(text);
       const explicitPtMatch = text.match(/^(?:patient(?:\s+name)?\s*[:=-]\s*)([A-Z][a-zA-Z'-]+(?:,\s*[A-Z][a-zA-Z'-]+|\s+[A-Z][a-zA-Z'-]+))/i);
-      const leadingNameMatch = text.match(/^([A-Z][a-z'-]+,\s*[A-Z][a-z'-]+|[A-Z][a-z'-]+\s+[A-Z][a-z'-]+)\s*(?:,\s*|\s+is\s+a\s+|\s+)(\d{2,3})\s*(?:-?\s*year\s*-?\s*old|yo|y\/o)?\s*(male|female|man|woman|m|f)\b/);
-      if (explicitPtMatch) {
+      const leadingNameMatch = text.match(/^([A-Z][a-z'-]+,\s*[A-Z][a-z'-]+|[A-Z][a-z'-]+\s+[A-Z][a-z'-]+)\s*(?:,\s*|\s+is\s+a\s+|\s+is\s+here\s+|\s+here\s+for\s+|\s+presents\s+|\s+)(\d{2,3}\s*(?:-?\s*year\s*-?\s*old|yo|y\/o)?\s*(?:male|female|man|woman|m|f)|\d{1,2}[- ]?week|post-?op|s\/p)/i);
+      if (knownMatch) {
+        cues.patientName = knownMatch.name;
+        if (knownMatch.ageGender && knownMatch.ageGender !== "Adult") cues.ageGender = knownMatch.ageGender;
+      } else if (explicitPtMatch) {
         cues.patientName = explicitPtMatch[1].trim();
-      } else if (leadingNameMatch && !/^(?:Right|Left|Bilateral|New|Post|Acute|Chronic|Patient|Status)\b/i.test(leadingNameMatch[1])) {
+      } else if (leadingNameMatch && !/^(?:Right|Left|Bilateral|New|Post|Acute|Chronic|Patient|Status|Normal|Standard|Physical)\b/i.test(leadingNameMatch[1])) {
         cues.patientName = leadingNameMatch[1].trim();
       }
 
@@ -3785,13 +3821,19 @@ Extract and return ONLY valid JSON matching:
         cues.ageGender = `${age}${genderLetter}`;
       }
 
-      // Extract laterality
+      // Extract laterality (including when both Right and Left are examined in the same visit)
+      const hasRightMention = /\bright\b/i.test(text);
+      const hasLeftMention = /\bleft\b/i.test(text);
       if (/\bbilateral\b/i.test(text)) cues.laterality = "Bilateral";
-      else if (/\bright\b/i.test(text)) cues.laterality = "Right";
-      else if (/\bleft\b/i.test(text)) cues.laterality = "Left";
+      else if (hasRightMention && !hasLeftMention) cues.laterality = "Right";
+      else if (hasLeftMention && !hasRightMention) cues.laterality = "Left";
+      else if (hasRightMention && hasLeftMention) {
+        const firstSide = text.match(/\b(right|left)\b/i);
+        cues.laterality = firstSide ? (firstSide[1].charAt(0).toUpperCase() + firstSide[1].slice(1).toLowerCase()) : "Bilateral";
+      }
 
       // Extract Index Procedure (e.g. "Left Total Knee Arthroplasty", "Right Direct Anterior Total Hip Arthroplasty")
-      const latPrefix = cues.laterality ? `${cues.laterality} ` : "";
+      const latPrefix = cues.laterality && cues.laterality !== "Bilateral" ? `${cues.laterality} ` : "";
       const procMatch = text.match(/\b((?:right|left|bilateral)\s+)?((?:direct\s+anterior\s+|revision\s+|primary\s+|medial\s+|lateral\s+|oxford\s+)?(?:total\s+knee\s+arthroplasty|total\s+hip\s+arthroplasty|unicompartmental\s+knee\s+arthroplasty|partial\s+knee\s+arthroplasty|hemiarthroplasty|bipolar\s+hemiarthroplasty|tka|tha|uka|orif\s+[a-z\s]{3,25}?fracture))\b/i);
       if (procMatch) {
         const sideRaw = procMatch[1] ? procMatch[1].trim() : (cues.laterality || "");
@@ -3816,16 +3858,51 @@ Extract and return ONLY valid JSON matching:
       else if (/\b(?:12[- ]?week|twelve[- ]?week|3[- ]?month|three[- ]?month)\b/i.test(text)) cues.postopInterval = "12-Week";
       else if (/\b(?:1[- ]?year|one[- ]?year|annual)\b/i.test(text)) cues.postopInterval = "1-Year";
 
-      // Extract ROM (e.g. "0° - 115°", "0 to 120", "flexion to 115")
-      const romRangeMatch = text.match(/\b(\d{1,2})\s*°?\s*(?:to|-|–)\s*(\d{2,3})\s*°?/i);
+      // Extract ROM — supporting unilateral, bilateral side-by-side, AND conversational delta ("change ROM to 5 to 115")
+      const deltaRomMatch = text.match(/\b(?:change|update|set|correct)\s+(?:the\s+)?(?:knee\s+|hip\s+)?(?:rom|range\s+of\s+motion|motion|flexion)\s+(?:to\s+|is\s+)?(\d{1,2})\s*°?\s*(?:to|-|–)\s*(\d{2,3})\s*°?/i);
+      const rightRomMatch = text.match(/\bright\s+(?:knee\s+|hip\s+)?(?:rom\s+|range\s+of\s+motion\s+|motion\s+|flexion\s+|is\s+)*(\d{1,2})\s*°?\s*(?:to|-|–)\s*(\d{2,3})\s*°?/i);
+      const leftRomMatch = text.match(/\bleft\s+(?:knee\s+|hip\s+)?(?:rom\s+|range\s+of\s+motion\s+|motion\s+|flexion\s+|is\s+)*(\d{1,2})\s*°?\s*(?:to|-|–)\s*(\d{2,3})\s*°?/i);
+      const allRomMatches = [...text.matchAll(/\b(\d{1,2})\s*°?\s*(?:to|-|–)\s*(\d{2,3})\s*°?/gi)];
+      const lastRomMatch = allRomMatches.length > 0 ? allRomMatches[allRomMatches.length - 1] : null;
       const flexOnlyMatch = text.match(/\bflexion\s+(?:to\s+|of\s+|is\s+)?(\d{2,3})\s*°?/i);
-      if (romRangeMatch) {
-        cues.kneeROM = `${romRangeMatch[1]}° - ${romRangeMatch[2]}°`;
+
+      if (deltaRomMatch) {
+        cues.kneeROM = `${deltaRomMatch[1]}° - ${deltaRomMatch[2]}°`;
+      } else if (rightRomMatch && leftRomMatch) {
+        cues.kneeROM = `Right: ${rightRomMatch[1]}° - ${rightRomMatch[2]}° | Left: ${leftRomMatch[1]}° - ${leftRomMatch[2]}°`;
+        cues.bilateralRomSummary = cues.kneeROM;
+      } else if (lastRomMatch) {
+        cues.kneeROM = `${lastRomMatch[1]}° - ${lastRomMatch[2]}°`;
       } else if (flexOnlyMatch) {
         cues.kneeROM = `0° - ${flexOnlyMatch[1]}°`;
       }
 
-      //Infer clinical module if obvious from dictation
+      // Extract Wound Closure protocol directly from speech ("Prevena", "Prineo", "Sylke / Aquacel")
+      if (/\b(?:prevena|negative\s+pressure\s+dressing|incisional\s+vac|cinpt)\b/i.test(text)) {
+        cues.closure = "prevena";
+      } else if (/\b(?:prineo|dermabond\s+prineo|mepilex)\b/i.test(text)) {
+        cues.closure = "prineo";
+      } else if (/\b(?:sylke|aquacel)\b/i.test(text)) {
+        cues.closure = "default";
+      }
+
+      // Extract Weight-Bearing Status & Assistive Device trajectory from speech
+      if (/\b(?:wbat|weight\s+bearing\s+as\s+tolerated|full\s+weight\s+bearing)\b/i.test(text)) {
+        cues.weightBearing = "WBAT";
+      } else if (/\b(?:nwb|non[- ]weight[- ]bearing)\b/i.test(text)) {
+        cues.weightBearing = "NWB";
+      } else if (/\b(?:tdwb|touch[- ]?down\s+weight[- ]?bearing|toe[- ]?touch\s+weight[- ]?bearing)\b/i.test(text)) {
+        cues.weightBearing = "TDWB";
+      } else if (/\b(?:pwb|partial\s+weight[- ]?bearing|50%\s+weight[- ]?bearing)\b/i.test(text)) {
+        cues.weightBearing = "PWB";
+      }
+
+      const deviceMatch = text.match(/\b(wean(?:ed|ing)\s+from\s+(?:a\s+)?walker\s+to\s+(?:a\s+)?cane|wean(?:ed|ing)\s+off\s+(?:the\s+)?(?:walker|cane|crutches)|ambulating\s+(?:independently\s+)?without\s+(?:an?\s+)?assistive\s+device|using\s+a\s+(?:rolling\s+)?walker|using\s+a\s+(?:single[- ]point\s+)?cane|using\s+crutches)\b/i);
+      if (deviceMatch) {
+        cues.assistiveDevice = deviceMatch[1].charAt(0).toUpperCase() + deviceMatch[1].slice(1);
+      }
+
+      // Infer clinical module if obvious from dictation
       const hasPostOpSignal = /\b(?:post-?op|postoperative|s\/p|status\s+post|incision|wound\s+check|staples|sutures|2-?week|6-?week|12-?week|1-?year\s+follow-?up)\b/i.test(text)
         || (Boolean(cues.indexProcedure) && Boolean(cues.indexDos) && !/\b(?:sign\s+up|schedule\s+for|consent\s+for|candidate\s+for)\b/i.test(text));
 
@@ -3851,13 +3928,20 @@ Extract and return ONLY valid JSON matching:
         cues.detectedModule = "new_knee";
       }
 
-      // Detect In-Clinic Joint Injection / Aspiration (CPT 20610 / 20611)
+      // Detect In-Clinic Joint Injection / Aspiration (CPT 20610 / 20611) + Specific Target Joint (e.g. contralateral knee injection during postop visit)
       if (/\b(?:aspirat(?:ed|ion)|arthrocentesis|synovial fluid sent|cell count and culture)\b/i.test(text) && !/\b(?:need|order|schedule)\s+(?:an?\s+)?aspiration\b/i.test(text)) {
         cues.clinicProcType = "asp_pji";
       } else if (/\b(?:ultrasound[- ]guided|us[- ]guided|fluoro[- ]guided|fluoroscopic[- ]guided)\s+(?:steroid\s+|cortisone\s+|kenalog\s+)?injection\b/i.test(text)) {
         cues.clinicProcType = "inj_20611";
       } else if (/\b(?:injected|cortisone injection|steroid injection|kenalog injection|depo-?medrol injection|intra-?articular injection performed)\b/i.test(text)) {
         cues.clinicProcType = "inj_20610";
+      }
+      const injJointMatch = text.match(/\b(right|left|bilateral)\s+(knee|hip|shoulder|ankle|subacromial|trochanteric)\s+(?:cortisone\s+|steroid\s+|kenalog\s+|depo-?medrol\s+|ha\s+|visco\w*\s+|intra-?articular\s+)?(?:injection|arthrocentesis|aspirat)/i)
+        || text.match(/\b(?:inject(?:ed|ion)|aspirat(?:ed|ion))\s+(?:of\s+|in\s+|into\s+)?(?:the\s+)?(right|left|bilateral)\s+(knee|hip|shoulder|ankle)/i);
+      if (injJointMatch) {
+        const jSide = injJointMatch[1].charAt(0).toUpperCase() + injJointMatch[1].slice(1).toLowerCase();
+        const jName = injJointMatch[2].charAt(0).toUpperCase() + injJointMatch[2].slice(1).toLowerCase();
+        cues.injectionTargetJoint = `${jSide} ${jName}`;
       }
 
       // Detect Pre-Op Optimization & Med-Hold Guardrails from dictation
@@ -3873,6 +3957,7 @@ Extract and return ONLY valid JSON matching:
       }
 
       // Split dictation into HPI vs Physical Exam (PE) vs Radiographs/Imaging vs Plan clauses
+      // Supports both automatic clinical keyword routing AND explicit Dragon/Doximity spoken section headers ("Physical exam...", "Imaging...", "Plan...")
       const clauses = segmentDictationIntoClinicalClauses(text);
       const hpiClauses = [];
       const peClauses = [];
@@ -3880,25 +3965,48 @@ Extract and return ONLY valid JSON matching:
       const xrayClauses = [];
       const orderClauses = [];
       const planClauses = [];
+      let currentSpokenSection = null; // "HPI" | "PE" | "IMAGING" | "PLAN"
 
-      clauses.forEach(clause => {
+      clauses.forEach(rawClause => {
+        let clause = rawClause.trim();
+        if (!clause) return;
+
+        // Detect and strip explicit spoken section headers
+        if (/^(?:subjective|history\s+of\s+present\s+illness|hpi|interval\s+history)\s*[:,-]?\s*/i.test(clause)) {
+          currentSpokenSection = "HPI";
+          clause = clause.replace(/^(?:subjective|history\s+of\s+present\s+illness|hpi|interval\s+history)\s*[:,-]?\s*/i, "").trim();
+        } else if (/^(?:on\s+physical\s+exam(?:ination)?|physical\s+exam(?:ination)?|on\s+exam|objective)\s*[:,-]?\s*/i.test(clause)) {
+          currentSpokenSection = "PE";
+          clause = clause.replace(/^(?:on\s+physical\s+exam(?:ination)?|physical\s+exam(?:ination)?|on\s+exam|objective)\s*[:,-]?\s*/i, "").trim();
+        } else if (/^(?:imaging(?:\s+findings)?|radiographic\s+findings|x-?ray\s+findings)\s*[:,-]?\s*/i.test(clause)) {
+          currentSpokenSection = "IMAGING";
+          clause = clause.replace(/^(?:imaging(?:\s+findings)?|radiographic\s+findings|x-?ray\s+findings)\s*[:,-]?\s*/i, "").trim();
+        } else if (/^(?:assessment\s+and\s+plan|impression\s+and\s+plan|assessment|plan\s+is|plan)\s*[:,-]?\s*/i.test(clause)) {
+          currentSpokenSection = "PLAN";
+          clause = clause.replace(/^(?:assessment\s+and\s+plan|impression\s+and\s+plan|assessment|plan\s+is|plan)\s*[:,-]?\s*/i, "").trim();
+        }
+        if (!clause) return;
+
         const cleanClause = clause.charAt(0).toUpperCase() + clause.slice(1);
         const hasNeedVerb = /\b(?:need|needs|order|obtain|get|repeat|due for|schedule for)\b/i.test(clause);
         const hasImagingOrWorkup = /\b(?:x-?rays?|xrs?|radiographs?|views?|ap pelvis|rosenberg|sunrise|merchant|standing|marker ball|esr|crp|aspiration|labs|ct|mri)\b/i.test(clause);
         const hasImagingFindings = /\b(?:x-?rays?|xrs?|radiographs?|imaging|films|kl-?\d|kellgren|bone-?on-?bone|joint space|narrowing|jsn|osteophyte|sclerosis|subchondral|loosening|radiolucen|subsidence|well[- ]aligned|well[- ]fixed|anatomic alignment|hardware intact|components? well)\b/i.test(clause);
-        const hasIncisionExam = /\b(?:incision|wound|staples|sutures|steri-?strips|prineo|prevena|dressings?|clean,?\s*dry|cdi\b|erythema|drainage|dehiscence|ecchymosis|induration|serosanguinous)\b/i.test(clause);
-        const hasPeFindings = hasIncisionExam || /\b(?:on\s+exam|physical\s+exam|exam\s+shows|edema|pitting\s+edema|swelling|range\s+of\s+motion|rom\b|flexion|extension|internal\s+rotation|external\s+rotation|contracture|stable\s+to\s+varus|varus\/valgus|lachman|pivot\s+shift|mcmurray|stinchfield|fadir|faber|effusion|tenderness|crepitus|neurovascularly|nvi\b|silt\b|pulses?\s+2\+|calves\s+soft|homan|motor\s+5\/5|ehl\b|antalgic\s+gait|trendelenburg)\b/i.test(clause);
+        const hasIncisionExam = /\b(?:incision|wound|staples|sutures|steri-?strips|prineo|prevena|dressings?|clean,?\s*dry|cdi\b|erythema|drainage|dehiscence|ecchymosis|induration|serosanguinous|purulent|fluctuance)\b/i.test(clause);
+        const hasPeFindings = hasIncisionExam || /\b(?:on\s+exam|physical\s+exam|exam\s+shows|edema|pitting\s+edema|swelling|range\s+of\s+motion|rom\b|flexion|extension|internal\s+rotation|external\s+rotation|contracture|extensor\s+lag|stable\s+to\s+varus|varus\/valgus|lachman|pivot\s+shift|mcmurray|stinchfield|fadir|faber|effusion|ballottable|hemarthrosis|tenderness|crepitus|neurovascularly|nvi\b|silt\b|pulses?\s+[1-4]\+|calves\s+soft|homan|motor\s+[1-5]\/5|5\/5|ehl\b|antalgic\s+gait|trendelenburg)\b/i.test(clause);
         const hasPlanAction = /\b(?:plan\s+is|plan\s*:|continue\s+(?:pt|physical\s+therapy|home\s+exercise)|advance\s+weight|follow\s*-?\s*up\s+in|return\s+to\s+clinic|rtc\b|wean\s+(?:walker|cane|crutches)|start\s+physical\s+therapy|sign\s+up\s+for|proceed\s+with\s+surgery|refill|continue\s+aspirin|dvt\s+prophylaxis)\b/i.test(clause);
 
         if (hasNeedVerb && hasImagingOrWorkup) {
           orderClauses.push(cleanClause);
-        } else if (hasImagingFindings) {
+        } else if (hasImagingFindings || currentSpokenSection === "IMAGING") {
+          currentSpokenSection = "IMAGING";
           xrayClauses.push(cleanClause);
-        } else if (hasPeFindings) {
+        } else if (hasPlanAction || currentSpokenSection === "PLAN") {
+          currentSpokenSection = "PLAN";
+          planClauses.push(cleanClause);
+        } else if (hasPeFindings || currentSpokenSection === "PE") {
+          currentSpokenSection = "PE";
           peClauses.push(cleanClause);
           if (hasIncisionExam) incisionClauses.push(cleanClause);
-        } else if (hasPlanAction) {
-          planClauses.push(cleanClause);
         } else {
           hpiClauses.push(cleanClause);
         }
@@ -3971,6 +4079,9 @@ Extract and return ONLY valid JSON matching:
       const resolvedPtName = parsed.patientName || localCues.patientName;
       if (resolvedPtName && !document.getElementById("ptName").value) {
         document.getElementById("ptName").value = resolvedPtName;
+        lookupPatient(false);
+      } else if (document.getElementById("ptName").value && !matchedCaseData) {
+        lookupPatient(false);
       }
       const resolvedAgeGender = parsed.ageGender || localCues.ageGender;
       if (resolvedAgeGender) document.getElementById("ptAgeGender").value = resolvedAgeGender;
@@ -3986,14 +4097,14 @@ Extract and return ONLY valid JSON matching:
       if (resolvedKneeRom && document.getElementById("kneeROM")) document.getElementById("kneeROM").value = resolvedKneeRom;
       if (parsed.kneeStab && document.getElementById("kneeStab")) document.getElementById("kneeStab").value = parsed.kneeStab;
 
-      // Populate Post-Op Surveillance & General SOAP fields from AI or local cues
-      const resolvedIndexProc = parsed.indexProcedure || localCues.indexProcedure;
+      // Populate Post-Op Surveillance & General SOAP fields from AI or local cues (or fallback to matchedCaseData from Case DB)
+      const resolvedIndexProc = parsed.indexProcedure || localCues.indexProcedure || (matchedCaseData && matchedCaseData.proc ? `${matchedCaseData.side || ""} ${matchedCaseData.proc}`.trim() : "");
       if (resolvedIndexProc) {
         if (document.getElementById("postopIndexProc")) document.getElementById("postopIndexProc").value = resolvedIndexProc;
         if (document.getElementById("jointId")) document.getElementById("jointId").value = resolvedIndexProc;
         if (document.getElementById("soapJointRegion")) document.getElementById("soapJointRegion").value = resolvedIndexProc;
       }
-      const resolvedIndexDos = parsed.indexSurgeryDate || parsed.indexDos || localCues.indexDos;
+      const resolvedIndexDos = parsed.indexSurgeryDate || parsed.indexDos || localCues.indexDos || (matchedCaseData && matchedCaseData.dos ? matchedCaseData.dos : "");
       if (resolvedIndexDos && document.getElementById("postopIndexDos")) {
         document.getElementById("postopIndexDos").value = resolvedIndexDos;
       }
@@ -4008,7 +4119,10 @@ Extract and return ONLY valid JSON matching:
       if (resolvedIncision && document.getElementById("postopIncision")) {
         document.getElementById("postopIncision").value = resolvedIncision;
       }
-      const resolvedPeSummary = parsed.physicalExamSummary || parsed.peSummary || localCues.peSummary || (resolvedKneeRom ? `ROM ${resolvedKneeRom}` : "");
+      let resolvedPeSummary = parsed.physicalExamSummary || parsed.peSummary || localCues.peSummary || (resolvedKneeRom ? `ROM ${resolvedKneeRom}` : "");
+      if (localCues.assistiveDevice && !resolvedPeSummary.toLowerCase().includes(localCues.assistiveDevice.toLowerCase())) {
+        resolvedPeSummary = resolvedPeSummary ? `${resolvedPeSummary}; ${localCues.assistiveDevice}` : localCues.assistiveDevice;
+      }
       if (resolvedPeSummary) {
         if (document.getElementById("postopRomExam")) document.getElementById("postopRomExam").value = resolvedPeSummary;
         if (document.getElementById("soapExamSummary")) document.getElementById("soapExamSummary").value = resolvedPeSummary;
@@ -4017,7 +4131,10 @@ Extract and return ONLY valid JSON matching:
       if (parsed.ebl && document.getElementById("opEbl")) document.getElementById("opEbl").value = parsed.ebl;
       if (parsed.implants && document.getElementById("opImplants")) document.getElementById("opImplants").value = parsed.implants;
 
-      const resolvedPlan = parsed.postOpInstructions || parsed.planSummary || localCues.planSummary || localCues.oneLinerSummary;
+      let resolvedPlan = parsed.postOpInstructions || parsed.planSummary || localCues.planSummary || localCues.oneLinerSummary || "";
+      if (localCues.weightBearing && !resolvedPlan.toLowerCase().includes("weight bearing") && !resolvedPlan.toLowerCase().includes("wbat")) {
+        resolvedPlan = resolvedPlan ? `${resolvedPlan} | ${localCues.weightBearing}` : localCues.weightBearing;
+      }
       if (resolvedPlan && document.getElementById("postOpInstructions")) {
         document.getElementById("postOpInstructions").value = resolvedPlan;
       }
@@ -4052,7 +4169,8 @@ Extract and return ONLY valid JSON matching:
         document.getElementById("optGlp1").value = resolvedGlp1;
       }
 
-      if (parsed.closure) setClosure(String(parsed.closure).toLowerCase());
+      const resolvedClosure = parsed.closure || localCues.closure;
+      if (resolvedClosure) setClosure(String(resolvedClosure).toLowerCase());
 
       // Flip stage from Pre-Visit to In-Clinic if physician is dictating active clinical exam/procedure/sign-up
       if (activeEncounterStage === "Pre-Visit" && (parsed.signedUpForSurgery || resolvedProcType || parsed.hipIR || resolvedKneeRom || resolvedPeSummary)) {
@@ -5161,9 +5279,120 @@ Dictation:
       return out;
     }
 
+    function formatOrthopedicNumbersAndGrades(text) {
+      if (!text) return "";
+      let out = String(text);
+
+      // 1. Suture sizes before suture names ("two oh monocryl" / "2 0 monocryl" / "20 monocryl" -> "2-0 Monocryl", "number 1 stratafix" -> "#1 Stratafix")
+      const sutureNames = "(?:Stratafix|Vicryl|Monocryl|PDS|Ethibond|Prolene|Nylon|Silk|FiberWire|suture)";
+      out = out.replace(new RegExp(`\\b(?:number\\s+one|number\\s+1|num\\s+1)\\s+(?=${sutureNames}\\b)`, "gi"), "#1 ");
+      out = out.replace(new RegExp(`\\b(?:number\\s+two|number\\s+2|num\\s+2)\\s+(?=${sutureNames}\\b)`, "gi"), "#2 ");
+      out = out.replace(new RegExp(`\\b(?:zero)\\s+(?=${sutureNames}\\b)`, "gi"), "0 ");
+      out = out.replace(new RegExp(`\\b(?:two\\s+oh|2\\s+oh|2\\s+o|2\\s+0|20)\\s+(?=${sutureNames}\\b)`, "gi"), "2-0 ");
+      out = out.replace(new RegExp(`\\b(?:three\\s+oh|3\\s+oh|3\\s+o|3\\s+0|30)\\s+(?=${sutureNames}\\b)`, "gi"), "3-0 ");
+      out = out.replace(new RegExp(`\\b(?:four\\s+oh|4\\s+oh|4\\s+o|4\\s+0|40)\\s+(?=${sutureNames}\\b)`, "gi"), "4-0 ");
+
+      // 2. Motor strength ("five out of five" / "5 out of 5" -> "5/5") & Pain scale ("8 out of 10" -> "8/10")
+      out = out.replace(/\b(?:five|5)\s+out\s+of\s+(?:five|5)\b/gi, "5/5");
+      out = out.replace(/\b(?:four|4)\s+plus\s+out\s+of\s+(?:five|5)\b/gi, "4+/5");
+      out = out.replace(/\b(?:four|4)\s+out\s+of\s+(?:five|5)\b/gi, "4/5");
+      out = out.replace(/\b(?:three|3)\s+out\s+of\s+(?:five|5)\b/gi, "3/5");
+      out = out.replace(/\b(10|[1-9])\s+out\s+of\s+10\b/gi, "$1/10");
+
+      // 3. Edema, Pulse & Laxity plus grades ("one plus pitting edema" -> "1+ pitting edema", "pulses two plus" -> "pulses 2+")
+      const examGradeTargets = "(?:pitting|non-pitting|edema|effusion|swelling|lachman|drawer|valgus|varus|pulse|pulses|dorsalis|posterior)";
+      out = out.replace(new RegExp(`\\b(?:one|1)\\s+plus\\s+(?=${examGradeTargets}\\b)`, "gi"), "1+ ");
+      out = out.replace(new RegExp(`\\b(?:two|2)\\s+plus\\s+(?=${examGradeTargets}\\b)`, "gi"), "2+ ");
+      out = out.replace(new RegExp(`\\b(?:three|3)\\s+plus\\s+(?=${examGradeTargets}\\b)`, "gi"), "3+ ");
+      out = out.replace(/\b(pulses?|dp|pt|dorsalis\s+pedis|posterior\s+tibial|edema|effusion|lachman)\s+(?:is\s+|are\s+)?(?:one|1)\s+plus\b/gi, "$1 1+");
+      out = out.replace(/\b(pulses?|dp|pt|dorsalis\s+pedis|posterior\s+tibial|edema|effusion|lachman)\s+(?:is\s+|are\s+)?(?:two|2)\s+plus\b/gi, "$1 2+");
+      out = out.replace(/\b(pulses?|dp|pt|dorsalis\s+pedis|posterior\s+tibial|edema|effusion|lachman)\s+(?:is\s+|are\s+)?(?:three|3)\s+plus\b/gi, "$1 3+");
+
+      // 4. Implant head sizes & offsets ("36 plus 0 head" / "360 head" -> "36mm (+0) head", "36 plus 4 head" / "364 head" -> "36mm (+4) head")
+      out = out.replace(/\b(28|32|36|40)\s*(?:mm\s*)?(?:plus|\+)\s*(\d(?:\.\d)?)\s+(head|delta|ceramic|cobalt|bipolar)\b/gi, "$1mm (+$2) $3");
+      out = out.replace(/\b(28|32|36|40)\s*(?:mm\s*)?(?:minus|-)\s*(\d(?:\.\d)?)\s+(head|delta|ceramic|cobalt|bipolar)\b/gi, "$1mm (-$2) $3");
+      out = out.replace(/\b(28|32|36|40)(0|4)\s+(head|delta\s+head|ceramic\s+head)\b/gi, "$1mm (+$2) $3");
+
+      // 5. Chondromalacia / OA / KL multi-grades ("grade 3 4" / "grade 34" -> "Grade III-IV", "grade 2 3" / "grade 23" -> "Grade II-III")
+      out = out.replace(/\bgrade\s+(?:3\s*4|34|three\s+four|3\s+to\s+4)\b/gi, "Grade III-IV");
+      out = out.replace(/\bgrade\s+(?:2\s*3|23|two\s+three|2\s+to\s+3)\b/gi, "Grade II-III");
+      out = out.replace(/\bgrade\s+(?:1\s*2|12|one\s+two|1\s+to\s+2)\b/gi, "Grade I-II");
+
+      // 6. Millimeter / Centimeter spoken units ("10 millimeter poly" -> "10mm poly", "54 millimeter cup" -> "54mm cup")
+      out = out.replace(/\b(\d{1,3})\s+millimeters?\b/gi, "$1mm");
+
+      // 7. Spoken formatting commands ("new line", "next line", "new paragraph")
+      out = out.replace(/\s*\b(?:new\s+paragraph|next\s+paragraph)\b\s*/gi, "\n\n");
+      out = out.replace(/\s*\b(?:new\s+line|next\s+line)\b\s*/gi, "\n");
+
+      return out;
+    }
+
+    function applyDragonScratchThatCommand(existingText, newChunk) {
+      const combined = `${existingText ? existingText.trim() + " " : ""}${newChunk.trim()}`.trim();
+      if (!/\b(?:scratch\s+that|delete\s+that)\b/i.test(combined)) {
+        return null;
+      }
+      // If the user said "scratch that", remove the preceding clause/phrase right before "scratch that"
+      const parts = combined.split(/\b(?:scratch\s+that|delete\s+that)\b/i);
+      let kept = (parts[0] || "").trim();
+      // Remove the last clause or last 6 words from `kept`
+      const clauseSplit = kept.split(/(?<=[.!?\n;])|\s+(?=(?:on\s+exam|physical\s+exam|incision|range\s+of\s+motion|rom\b|x-?rays?|plan\b))/i);
+      if (clauseSplit.length > 1) {
+        clauseSplit.pop();
+        kept = clauseSplit.join(" ").trim();
+      } else {
+        const words = kept.split(/\s+/);
+        kept = words.slice(0, Math.max(0, words.length - 6)).join(" ").trim();
+      }
+      const tail = parts.slice(1).join(" ").trim();
+      return normalizeOrthopedicSpeech([kept, tail].filter(Boolean).join(" "));
+    }
+
+    function expandSpokenVoiceMacros(text) {
+      if (!text) return "";
+      let out = String(text);
+      const macros = [
+        [
+          /\b(?:normal|routine|standard)\s+(?:two|2)[\s-]*week\s+knee(?:\s+exam|\s+post[\s-]*op)?\b/gi,
+          "2-week post-op TKA follow-up. Incision clean, dry, intact with Sylke/Prineo dressing removed. Range of motion 0° - 100° without extensor lag. Stable to varus and valgus stress. Distally neurovascularly intact. Continue outpatient physical therapy, WBAT, and return to clinic in 4 weeks."
+        ],
+        [
+          /\b(?:normal|routine|standard)\s+(?:six|6)[\s-]*week\s+knee(?:\s+exam|\s+post[\s-]*op)?\b/gi,
+          "6-week post-op TKA follow-up. Well-healed surgical incision without erythema or drainage. Range of motion 0° - 120° with full extension and strong quadriceps fire. Radiographs demonstrate well-aligned, well-fixed total knee arthroplasty components without loosening. Progress activities as tolerated and return in 6 weeks."
+        ],
+        [
+          /\b(?:normal|routine|standard)\s+(?:two|2)[\s-]*week\s+hip(?:\s+exam|\s+post[\s-]*op)?\b/gi,
+          "2-week post-op THA follow-up. Incision clean, dry, intact without erythema or drainage. Pain well-controlled, ambulating comfortably with assistive device, distally neurovascularly intact with 5/5 EHL/TA/GS motor strength. Continue progressive ambulation, WBAT, and return to clinic in 4 weeks."
+        ],
+        [
+          /\b(?:normal|routine|standard)\s+(?:six|6)[\s-]*week\s+hip(?:\s+exam|\s+post[\s-]*op)?\b/gi,
+          "6-week post-op THA follow-up. Well-healed surgical incision. Pain-free hip range of motion, non-antalgic gait weaned off assistive devices, equal leg lengths. Radiographs show well-positioned, well-fixed acetabular and femoral components without subsidence. Clear for progressive low-impact activities and return at 1 year."
+        ],
+        [
+          /\b(?:standard|routine)\s+dvt\s+(?:protocol|prophylaxis)\b/gi,
+          "Aspirin 81mg PO BID x 4 weeks for venous thromboembolism prophylaxis, early ambulation, and mechanical calf compression."
+        ],
+        [
+          /\b(?:standard|routine)\s+(?:multimodal\s+)?pain\s+protocol\b/gi,
+          "Multimodal analgesia with scheduled Acetaminophen 1000mg TID, Meloxicam 15mg daily, Gabapentin, cryotherapy, and breakthrough Oxycodone 5mg PRN."
+        ],
+        [
+          /\bnormal\s+neurovascular(?:\s+exam)?\b/gi,
+          "Sensation intact throughout L2-S1 dermatomes, motor 5/5 EHL/TA/GS/Quad, 2+ dorsalis pedis and posterior tibial pulses, calves soft and nontender."
+        ]
+      ];
+      for (const [rx, expansion] of macros) {
+        out = out.replace(rx, expansion);
+      }
+      return out;
+    }
+
     function normalizeOrthopedicSpeech(rawText) {
       if (!rawText) return "";
       let out = String(rawText);
+      // 0. Expand spoken voice macros ("normal 2 week knee", "standard DVT protocol", etc.)
+      out = expandSpokenVoiceMacros(out);
       // 1. Apply explicit phonetic regex rules
       for (const [regex, replacement] of BUILTIN_ORTHO_PHONETIC_RULES) {
         out = out.replace(regex, replacement);
@@ -5181,12 +5410,14 @@ Dictation:
       // 4. Format spoken degree numbers (e.g. "5 degrees" -> "5°", "0 to 110 degrees" -> "0° - 110°")
       out = out.replace(/\b(\d{1,3})\s+to\s+(\d{1,3})\s+degrees\b/gi, "$1° - $2°");
       out = out.replace(/\b(\d{1,3})\s+degrees\b/gi, "$1°");
-      // 5. Format spoken dates (e.g. "11 5" -> "11/5", "115" -> "11/5")
+      // 5. Format orthopedic suture sizes, motor/edema/pulse grades, head offsets, and chondromalacia grades
+      out = formatOrthopedicNumbersAndGrades(out);
+      // 6. Format spoken dates (e.g. "11 5" -> "11/5", "115" -> "11/5")
       out = formatSpokenDatesInText(out);
       return out;
     }
 
-    // --- Doximity Scribe-Style Full-Screen Focus Dictation Window + Hybrid Voice Engine ---
+    // --- Doximity Scribe-Style Full-Screen Focus Dictation Window + Hybrid Voice Engine + Screen Wake Lock ---
     let speechRecognitionInstance = null;
     let isVoiceDictating = false;
     let userStoppedVoiceDictation = false;
@@ -5199,6 +5430,34 @@ Dictation:
     let focusParallelAudioRecorder = null;
     let focusParallelAudioStream = null;
     let focusParallelAudioChunks = [];
+    let activeScreenWakeLock = null;
+
+    async function requestDictationWakeLock() {
+      if (!("wakeLock" in navigator) || !navigator.wakeLock) return;
+      try {
+        if (activeScreenWakeLock) return;
+        activeScreenWakeLock = await navigator.wakeLock.request("screen");
+        activeScreenWakeLock.addEventListener("release", () => {
+          activeScreenWakeLock = null;
+        });
+      } catch (e) {
+        activeScreenWakeLock = null;
+      }
+    }
+
+    async function releaseDictationWakeLock() {
+      if (!activeScreenWakeLock) return;
+      try {
+        await activeScreenWakeLock.release();
+      } catch (e) {}
+      activeScreenWakeLock = null;
+    }
+
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible" && isVoiceDictating) {
+        requestDictationWakeLock();
+      }
+    });
 
     function saveAutoParsePreference(enabled) {
       safeSetLocalStorage("orthoflow_auto_parse_on_stop", enabled ? "1" : "0");
@@ -5361,12 +5620,12 @@ Dictation:
 
       if (listening) {
         if (dot) dot.className = "w-3.5 h-3.5 rounded-full bg-red-500 animate-ping shrink-0";
-        if (title) title.innerText = "Listening (Ortho Lexicon Active)";
+        if (title) title.innerText = "Listening (Ortho Lexicon & Wake Lock Active)";
         if (pauseBtn) pauseBtn.className = "py-4 px-4 rounded-2xl bg-amber-600/25 border-2 border-amber-500/60 hover:bg-amber-600/35 active:scale-[0.99] text-sm sm:text-base font-bold text-amber-200 flex items-center justify-center gap-2 transition-all";
         if (pauseIcon) pauseIcon.innerText = "⏸️";
         if (pauseLabel) pauseLabel.innerText = "Pause Mic";
         if (interimText && !pendingInterimTranscript) {
-          interimText.innerText = "🎙️ Speak now — words appear & auto-correct as you talk...";
+          interimText.innerText = "🎙️ Speak now — words appear & auto-correct as you talk (say 'Physical Exam', 'Imaging', 'Plan', or 'Scratch That')...";
         }
       } else {
         if (dot) dot.className = "w-3.5 h-3.5 rounded-full bg-amber-400 shrink-0";
@@ -5393,6 +5652,7 @@ Dictation:
       userStoppedVoiceDictation = true;
       isVoiceDictating = false;
       stopFocusTimer();
+      releaseDictationWakeLock();
       flushPendingInterimTranscript();
       try { if (speechRecognitionInstance) speechRecognitionInstance.stop(); } catch (e) {}
       await stopAndCollectParallelAudioPart();
@@ -5415,6 +5675,7 @@ Dictation:
       userStoppedVoiceDictation = true;
       isVoiceDictating = false;
       stopFocusTimer();
+      releaseDictationWakeLock();
       try { if (speechRecognitionInstance) speechRecognitionInstance.stop(); } catch (e) {}
 
       const doneLabel = document.getElementById("focusModalDoneLabel");
@@ -5550,11 +5811,14 @@ Dictation:
 
         if (finalChunk.trim()) {
           pendingInterimTranscript = "";
-          const correctedFinal = normalizeOrthopedicSpeech(finalChunk.trim());
           const box = document.getElementById("dictationBox");
           const focusTextarea = document.getElementById("focusModalTranscript");
           const existing = box.value.trim();
-          const combined = normalizeOrthopedicSpeech((existing ? existing + " " : "") + correctedFinal);
+          const scratchHandled = applyDragonScratchThatCommand(existing, finalChunk.trim());
+          const correctedFinal = normalizeOrthopedicSpeech(finalChunk.trim());
+          const combined = scratchHandled !== null
+            ? scratchHandled
+            : normalizeOrthopedicSpeech((existing ? existing + " " : "") + correctedFinal);
           box.value = combined;
           if (focusTextarea) {
             focusTextarea.value = combined;
@@ -5572,6 +5836,7 @@ Dictation:
         }
         userStoppedVoiceDictation = true;
         isVoiceDictating = false;
+        releaseDictationWakeLock();
         flushPendingInterimTranscript();
         resetVoiceMicButtonUI(false);
         updateFocusModalListeningUI(false);
@@ -5587,6 +5852,7 @@ Dictation:
         isVoiceDictating = false;
       };
 
+      requestDictationWakeLock();
       speechRecognitionInstance.start();
     }
 
@@ -5600,6 +5866,28 @@ Dictation:
       const timerEl = document.getElementById("focusModalTimer");
       if (timerEl) timerEl.innerText = "00:00";
       openFocusDictationModal();
+      startParallelAudioCaptureIfEnabled();
+      startSpeechRecognitionEngine();
+    }
+
+    function startVoiceAddendumDictation() {
+      const box = document.getElementById("dictationBox");
+      if (box && box.value.trim()) {
+        let cur = box.value.trim();
+        if (!/[.!?]$/.test(cur)) cur += ".";
+        box.value = cur + " ";
+      }
+      if (isVoiceDictating && speechRecognitionInstance) {
+        openFocusDictationModal();
+        return;
+      }
+      focusElapsedSeconds = 0;
+      wordsSpokenThisSession = 0;
+      const timerEl = document.getElementById("focusModalTimer");
+      if (timerEl) timerEl.innerText = "00:00";
+      openFocusDictationModal();
+      const statusText = document.getElementById("focusModalStatusText");
+      if (statusText) statusText.innerText = "ADDENDUM MODE — Speak targeted updates (e.g. 'Change ROM to 0 to 120', 'Return in 4 weeks')";
       startParallelAudioCaptureIfEnabled();
       startSpeechRecognitionEngine();
     }
@@ -6646,7 +6934,8 @@ MEDICAL DECISION MAKING (MDM), ASSESSMENT & PLAN:
         const procDetails = (document.getElementById("clinicProcDetails") ? document.getElementById("clinicProcDetails").value.trim() : "")
           || "40mg Triamcinolone acetonide (Kenalog) + 4mL 1% Lidocaine + 4mL 0.25% Bupivacaine (Marcaine) administered under strict aseptic technique";
         const lat = localCues.laterality || (document.getElementById("lat") ? document.getElementById("lat").value : "Right");
-        const jointLabel = type === "new_hip" ? `${lat} Hip` : type === "new_knee" ? `${lat} Knee` : (document.getElementById("jointId") ? document.getElementById("jointId").value : `${lat} Major Joint`);
+        const jointLabel = localCues.injectionTargetJoint
+          || (type === "new_hip" ? `${lat} Hip` : type === "new_knee" ? `${lat} Knee` : (document.getElementById("jointId") ? document.getElementById("jointId").value : (localCues.indexProcedure || `${lat} Major Joint`)));
 
         if (procType !== "none") {
           const cptProc = procType === "inj_20611"
@@ -6684,7 +6973,13 @@ ${procHeader}
         }
       }
 
+      // Reconcile any normal template boilerplate with positive abnormal findings dictated by the surgeon
+      note = reconcilePertinentPositivesInNote(note, combinedRawDictation);
+
       document.getElementById("noteOutput").value = note;
+
+      // Update live Extracted Cues & Missing-Detail Quick-Tap Chips bar above the note
+      renderExtractedCuesAndQuickChipsBar(type, localCues);
 
       // Keep active encounter's cached assembledNote synced for "Export All Remaining Notes"
       if (activeEncounterId) {
@@ -6697,6 +6992,220 @@ ${procHeader}
       }
     }
 
+    function renderExtractedCuesAndQuickChipsBar(type, localCues) {
+      const bar = document.getElementById("extractedCuesBar");
+      if (!bar) return;
+      const cues = localCues || {};
+      const ptVal = (document.getElementById("ptName") ? document.getElementById("ptName").value.trim() : "") || cues.patientName || "";
+      const latVal = cues.laterality || (document.getElementById("lat") ? document.getElementById("lat").value : "");
+      const romVal = cues.kneeROM || (document.getElementById("kneeROM") ? document.getElementById("kneeROM").value : "");
+      const procVal = cues.indexProcedure || (document.getElementById("postopIndexProc") ? document.getElementById("postopIndexProc").value.trim() : "") || (matchedCaseData && matchedCaseData.proc ? `${matchedCaseData.side || ""} ${matchedCaseData.proc}`.trim() : "");
+      const dosVal = cues.indexDos || (document.getElementById("postopIndexDos") ? document.getElementById("postopIndexDos").value.trim() : "") || (matchedCaseData && matchedCaseData.dos ? matchedCaseData.dos : "");
+      const peVal = cues.peSummary || (document.getElementById("postopRomExam") ? document.getElementById("postopRomExam").value.trim() : "") || (document.getElementById("soapExamSummary") ? document.getElementById("soapExamSummary").value.trim() : "");
+      const xrayVal = cues.xrayFindings || (document.getElementById("xrayFindingsInput") ? document.getElementById("xrayFindingsInput").value.trim() : "");
+      const planVal = (document.getElementById("postOpInstructions") ? document.getElementById("postOpInstructions").value.trim() : "") || cues.planSummary || "";
+
+      const pills = [];
+      const modLabels = {
+        new_hip: "New Hip OA",
+        new_knee: "New Knee OA",
+        postop: "Post-Op Follow-Up",
+        general_soap: "General Ortho SOAP",
+        painful_joint: "Painful Joint Workup",
+        op_tha_da: "Op Note: DA THA",
+        op_tha_post: "Op Note: Post THA",
+        op_tka: "Op Note: Robotic TKA",
+        op_uka: "Op Note: Oxford UKA"
+      };
+      pills.push(`<span class="px-2 py-0.5 rounded-md bg-blue-950/80 border border-blue-700/60 text-blue-300 text-[10px] font-bold">📋 ${modLabels[type] || type}</span>`);
+
+      if (ptVal) {
+        const dbTag = matchedCaseData ? ` 🔗 Case DB (${matchedCaseData.proc || "Matched"})` : "";
+        pills.push(`<span class="px-2 py-0.5 rounded-md bg-emerald-950/80 border border-emerald-700/60 text-emerald-300 text-[10px] font-bold">👤 ${escapeHtml(ptVal)}${escapeHtml(dbTag)}</span>`);
+      }
+      if (procVal || dosVal) {
+        pills.push(`<span class="px-2 py-0.5 rounded-md bg-indigo-950/80 border border-indigo-700/60 text-indigo-300 text-[10px] font-bold">🦾 ${escapeHtml(procVal || "Index Surgery")}${dosVal ? ` (${escapeHtml(dosVal)})` : ""}</span>`);
+      } else if (latVal && !type.startsWith("op_")) {
+        pills.push(`<span class="px-2 py-0.5 rounded-md bg-slate-900 border border-slate-700 text-slate-300 text-[10px] font-semibold">🧭 Side: ${escapeHtml(latVal)}</span>`);
+      }
+      if (cues.kneeROM || (type === "new_knee" && romVal)) {
+        pills.push(`<span class="px-2 py-0.5 rounded-md bg-cyan-950/80 border border-cyan-700/60 text-cyan-300 text-[10px] font-bold">📐 ROM: ${escapeHtml(cues.kneeROM || romVal)}</span>`);
+      }
+      if (peVal) {
+        const shortPe = peVal.length > 38 ? peVal.slice(0, 35) + "..." : peVal;
+        pills.push(`<span class="px-2 py-0.5 rounded-md bg-teal-950/80 border border-teal-700/60 text-teal-300 text-[10px] font-semibold" title="${escapeHtml(peVal)}">🩺 PE: ${escapeHtml(shortPe)}</span>`);
+      }
+      if (xrayVal) {
+        const shortXr = xrayVal.length > 34 ? xrayVal.slice(0, 31) + "..." : xrayVal;
+        pills.push(`<span class="px-2 py-0.5 rounded-md bg-amber-950/80 border border-amber-700/60 text-amber-300 text-[10px] font-semibold" title="${escapeHtml(xrayVal)}">🩻 XR: ${escapeHtml(shortXr)}</span>`);
+      }
+      if (planVal) {
+        const shortPlan = planVal.length > 38 ? planVal.slice(0, 35) + "..." : planVal;
+        pills.push(`<span class="px-2 py-0.5 rounded-md bg-purple-950/80 border border-purple-700/60 text-purple-300 text-[10px] font-semibold" title="${escapeHtml(planVal)}">🎯 Plan: ${escapeHtml(shortPlan)}</span>`);
+      }
+      const closureLabels = { default: "Sylke", prineo: "Prineo", prevena: "Prevena" };
+      pills.push(`<span class="px-2 py-0.5 rounded-md bg-slate-900 border border-slate-700 text-slate-300 text-[10px] font-semibold">🩹 Closure: ${closureLabels[currentClosure] || "Sylke"}</span>`);
+
+      // Build Quick-Tap Missing Detail Chips
+      const quickChips = [];
+      if ((type === "postop" || type === "new_knee" || (type === "general_soap" && /knee|tka|uka/i.test(procVal))) && !cues.kneeROM) {
+        quickChips.push(`
+          <div class="flex items-center gap-1 flex-wrap">
+            <span class="text-[10px] font-bold text-amber-400 uppercase tracking-wider">⚡ Quick ROM:</span>
+            <button type="button" onclick="applyQuickChipRom('0° - 120°')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-blue-900/70 text-slate-200 border border-slate-700 text-[10px] font-semibold transition">0°-120°</button>
+            <button type="button" onclick="applyQuickChipRom('0° - 110°')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-blue-900/70 text-slate-200 border border-slate-700 text-[10px] font-semibold transition">0°-110°</button>
+            <button type="button" onclick="applyQuickChipRom('0° - 95°')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-blue-900/70 text-slate-200 border border-slate-700 text-[10px] font-semibold transition">0°-95°</button>
+            <button type="button" onclick="applyQuickChipRom('5° - 105°')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-blue-900/70 text-slate-200 border border-slate-700 text-[10px] font-semibold transition">5°-105°</button>
+          </div>
+        `);
+      }
+      if (type === "new_hip" && !cues.hipIR) {
+        quickChips.push(`
+          <div class="flex items-center gap-1 flex-wrap">
+            <span class="text-[10px] font-bold text-amber-400 uppercase tracking-wider">⚡ Hip IR:</span>
+            <button type="button" onclick="applyQuickChipHipIr('0° (Severe Pain)')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-blue-900/70 text-slate-200 border border-slate-700 text-[10px] font-semibold transition">0° Severe</button>
+            <button type="button" onclick="applyQuickChipHipIr('5° (Painful)')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-blue-900/70 text-slate-200 border border-slate-700 text-[10px] font-semibold transition">5° Painful</button>
+            <button type="button" onclick="applyQuickChipHipIr('10° (Guarded)')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-blue-900/70 text-slate-200 border border-slate-700 text-[10px] font-semibold transition">10° Guarded</button>
+          </div>
+        `);
+      }
+      if (!type.startsWith("op_") && !/\b(?:return|rtc|follow[\s-]*up|prn)\b/i.test(planVal)) {
+        quickChips.push(`
+          <div class="flex items-center gap-1 flex-wrap">
+            <span class="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">⚡ Quick Plan:</span>
+            <button type="button" onclick="applyQuickChipPlan('Return to clinic in 2 weeks.')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-emerald-900/70 text-slate-200 border border-slate-700 text-[10px] font-semibold transition">+ RTC 2w</button>
+            <button type="button" onclick="applyQuickChipPlan('Return to clinic in 6 weeks with radiographs.')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-emerald-900/70 text-slate-200 border border-slate-700 text-[10px] font-semibold transition">+ RTC 6w XR</button>
+            <button type="button" onclick="applyQuickChipPlan('Return to clinic in 12 weeks.')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-emerald-900/70 text-slate-200 border border-slate-700 text-[10px] font-semibold transition">+ RTC 12w</button>
+            <button type="button" onclick="applyQuickChipPlan('Return to clinic in 1 year for annual surveillance.')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-emerald-900/70 text-slate-200 border border-slate-700 text-[10px] font-semibold transition">+ RTC 1yr</button>
+            <button type="button" onclick="applyQuickChipPlan('Continue outpatient physical therapy and WBAT.')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-emerald-900/70 text-slate-200 border border-slate-700 text-[10px] font-semibold transition">+ PT & WBAT</button>
+          </div>
+        `);
+      }
+      if (type.startsWith("op_")) {
+        quickChips.push(`
+          <div class="flex items-center gap-1 flex-wrap">
+            <span class="text-[10px] font-bold text-amber-400 uppercase tracking-wider">⚡ Quick EBL:</span>
+            <button type="button" onclick="applyQuickChipEbl('50 cc')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-blue-900/70 text-slate-200 border border-slate-700 text-[10px] font-semibold transition">50 cc</button>
+            <button type="button" onclick="applyQuickChipEbl('75 cc')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-blue-900/70 text-slate-200 border border-slate-700 text-[10px] font-semibold transition">75 cc</button>
+            <button type="button" onclick="applyQuickChipEbl('100 cc')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-blue-900/70 text-slate-200 border border-slate-700 text-[10px] font-semibold transition">100 cc</button>
+            <button type="button" onclick="applyQuickChipEbl('150 cc')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-blue-900/70 text-slate-200 border border-slate-700 text-[10px] font-semibold transition">150 cc</button>
+          </div>
+        `);
+      }
+
+      bar.innerHTML = `
+        <div class="flex items-center gap-1.5 flex-wrap">
+          <span class="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mr-0.5">Parsed Cues:</span>
+          ${pills.join("")}
+        </div>
+        ${quickChips.length > 0 ? `<div class="flex items-center gap-3 flex-wrap pt-1 border-t border-slate-800/80">${quickChips.join("")}</div>` : ""}
+      `;
+    }
+
+    function applyQuickChipRom(romStr) {
+      if (document.getElementById("kneeROM")) {
+        document.getElementById("kneeROM").value = romStr;
+      }
+      if (document.getElementById("postopRomExam")) {
+        const cur = document.getElementById("postopRomExam").value.trim();
+        document.getElementById("postopRomExam").value = cur
+          ? (/\bROM\b/i.test(cur) ? cur.replace(/ROM\s*[:=-]?\s*\d{1,3}°?\s*-\s*\d{1,3}°?/i, `ROM ${romStr}`) : `ROM ${romStr}; ${cur}`)
+          : `ROM ${romStr}, neurovascularly intact`;
+      }
+      if (document.getElementById("soapExamSummary")) {
+        const cur = document.getElementById("soapExamSummary").value.trim();
+        document.getElementById("soapExamSummary").value = cur ? `ROM ${romStr}; ${cur}` : `ROM ${romStr}, neurovascularly intact`;
+      }
+      const box = document.getElementById("dictationBox");
+      if (box && !/\b\d{1,3}°?\s*(?:to|-)\s*\d{1,3}°?\b/.test(box.value)) {
+        box.value = (box.value.trim() ? box.value.trim() + " " : "") + `ROM ${romStr}.`;
+      }
+      autoSaveCurrentEncounter();
+      assembleNote();
+    }
+
+    function applyQuickChipHipIr(irVal) {
+      if (document.getElementById("hipIR")) {
+        document.getElementById("hipIR").value = irVal;
+      }
+      autoSaveCurrentEncounter();
+      assembleNote();
+    }
+
+    function applyQuickChipPlan(planSnippet) {
+      const el = document.getElementById("postOpInstructions");
+      if (el) {
+        const cur = el.value.trim();
+        el.value = cur ? `${cur} ${planSnippet}` : planSnippet;
+      }
+      autoSaveCurrentEncounter();
+      assembleNote();
+    }
+
+    function applyQuickChipEbl(eblVal) {
+      if (document.getElementById("opEbl")) {
+        document.getElementById("opEbl").value = eblVal;
+      }
+      autoSaveCurrentEncounter();
+      assembleNote();
+    }
+
+    function hasPositiveFindingInDictation(text, findingRegex) {
+      if (!text) return false;
+      const clauses = String(text).split(/(?:[.!?\n;]+|\s+\|\s+)/);
+      for (const c of clauses) {
+        if (findingRegex.test(c) && !/\b(?:no|without|denies|negative|absent|resolved|free\s+of)\b/i.test(c)) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    function reconcilePertinentPositivesInNote(note, rawContextText) {
+      if (!note || !rawContextText) return note;
+      const normText = normalizeOrthopedicSpeech(rawContextText);
+      let out = note;
+
+      // 1. Erythema / Redness positive finding -> strip "no erythema" / "without erythema" boilerplate
+      if (hasPositiveFindingInDictation(normText, /\b(?:erythema|erythematous|redness|warmth)\b/i)) {
+        out = out.replace(/without erythema,\s*induration,\s*sinus tracts/gi, "without sinus tracts (focal erythema evaluated as noted)");
+        out = out.replace(/without erythema or open lesions/gi, "without open lesions (erythema noted on exam)");
+        out = out.replace(/without erythema or effusion/gi, "with erythema noted on exam");
+        out = out.replace(/;\s*no erythema or drainage/gi, "; evaluated for erythema/wound status as below");
+      }
+
+      // 2. Drainage / Dehiscence / Serosanguinous / Purulent positive finding -> strip "clean, dry, intact; no erythema or drainage"
+      if (hasPositiveFindingInDictation(normText, /\b(?:drainage|serosanguinous|purulent|dehiscence|wound\s+breakdown|sinus\s+tract)\b/i)) {
+        out = out.replace(/Clean,\s*dry,\s*intact;\s*no erythema or drainage/gi, "Wound/incision drainage evaluated on exam (see detailed findings below)");
+        out = out.replace(/No acute bacteremia or wound breakdown reported\./gi, "Wound status and drainage evaluated as documented above.");
+      }
+
+      // 3. Edema / Pitting Edema / Calf Swelling / Positive Homan's
+      if (hasPositiveFindingInDictation(normText, /\b(?:calf\s+tenderness|calf\s+swelling|positive\s+homan'?s?)\b/i)) {
+        out = out.replace(/Calves soft(?:,\s*|\s+and\s+)nontender(?:,\s*negative Homan's)?\./gi, "Lower extremity calf and vascular status evaluated as documented in exam above.");
+      }
+
+      // 4. Effusion override (if surgeon explicitly dictates "no effusion", remove "Mild-to-moderate intra-articular effusion"; if positive effusion, remove "without effusion")
+      if (/\b(?:no\s+effusion|without\s+effusion|no\s+joint\s+effusion)\b/i.test(normText)) {
+        out = out.replace(/Mild-to-moderate intra-articular effusion and joint line osteophyte prominence\./gi, "No intra-articular effusion; joint line osteophyte prominence noted.");
+      } else if (hasPositiveFindingInDictation(normText, /\b(?:effusion|ballottable|hemarthrosis)\b/i)) {
+        out = out.replace(/without erythema or effusion/gi, "without erythema (joint effusion noted on exam)");
+      }
+
+      // 5. Extensor Lag / Flexion Contracture / Arthrofibrosis / Stiffness -> remove "progressing satisfactorily without guarded motion block"
+      if (hasPositiveFindingInDictation(normText, /\b(?:extensor\s+lag|flexion\s+contracture|arthrofibrosis|motion\s+block|stiffness)\b/i)) {
+        out = out.replace(/;\s*progressing satisfactorily without guarded motion block/gi, "");
+        out = out.replace(/Progressing satisfactorily without guarded motion block;/gi, "Range of motion evaluated;");
+      }
+
+      // 6. Ligamentous Instability / Laxity -> remove "Stable varus/valgus, intact ACL" / "stable throughout arc" defaults if not manually overridden
+      if (hasPositiveFindingInDictation(normText, /\b(?:instability|unstable|laxity|positive\s+lachman|lachman\s+[1-3])/i)) {
+        out = out.replace(/;\s*stable throughout arc/gi, "; stability evaluated on exam");
+      }
+
+      return out;
+    }
+
     function copyNote() {
       const rawNote = document.getElementById("noteOutput").value;
       const ptName = document.getElementById("ptName").value || "Patient";
@@ -6707,6 +7216,43 @@ ${procHeader}
         btn.innerText = isDeidentifyEnabled ? "De-ID Copied & Exported ✓" : "Copied & Marked Exported ✓";
         setTimeout(() => { btn.innerText = "Copy Note"; }, 1800);
       });
+    }
+
+    function copyNoteAndAdvance() {
+      const rawNote = document.getElementById("noteOutput").value;
+      const ptName = document.getElementById("ptName").value || "Patient";
+      const note = applyDeidentificationIfEnabled(rawNote, ptName);
+      markActiveEncounterExported();
+
+      const advanceAfterCopy = () => {
+        const btn = document.getElementById("copyAndNextBtn");
+        if (btn) {
+          btn.innerText = "Copied & Advancing ✓";
+          setTimeout(() => { btn.innerText = "📋 Copy & Next →"; }, 1600);
+        }
+        const encounters = getClinicEncounters(currentClinicDate);
+        const currentIdx = encounters.findIndex(e => e.id === activeEncounterId);
+        // Find the next unexported encounter after the current one, or wrap around to any remaining unexported encounter
+        let nextEnc = null;
+        if (currentIdx !== -1) {
+          nextEnc = encounters.slice(currentIdx + 1).find(e => e.exported !== true)
+            || encounters.slice(0, currentIdx).find(e => e.exported !== true);
+        } else {
+          nextEnc = encounters.find(e => e.exported !== true);
+        }
+        if (nextEnc && currentWorkflowMode !== "quick") {
+          loadEncounterIntoWorkspace(nextEnc.id);
+        } else {
+          // If all roster patients are exported (or in Quick Scribe mode), reset for a fresh Quick Scribe note
+          startOnTheFlyDictation(false);
+        }
+      };
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(note).then(advanceAfterCopy).catch(advanceAfterCopy);
+      } else {
+        advanceAfterCopy();
+      }
     }
 
     function shareToKeep() {
