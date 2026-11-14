@@ -72,6 +72,9 @@
       </div>
     </div>
     <div class="flex items-center flex-wrap gap-1 min-w-0">
+      <button onclick="activateQuickScribeMode()" id="headerQuickScribeBtn" class="px-2 py-1 rounded-lg bg-indigo-600/25 border border-indigo-500/50 text-[10px] text-indigo-200 font-semibold active:bg-indigo-600/40" title="Start an on-the-fly dictation using any template without a pre-existing encounter">
+        ⚡ Quick Scribe
+      </button>
       <button onclick="toggleApiKeyModal()" id="apiKeyStatusBtn" class="px-2 py-1 rounded-lg bg-purple-600/20 border border-purple-500/40 text-[10px] text-purple-300 font-medium active:bg-purple-600/30">
         API Key
       </button>
@@ -91,8 +94,37 @@
   <!-- ================= MAIN CONTAINER ================= -->
   <main class="flex-1 max-w-2xl mx-auto w-full min-w-0 p-4 flex flex-col gap-4 pb-12">
 
+    <!-- Workflow Mode Switcher: On-The-Fly Quick Scribe (Doximity Style) vs Scheduled Clinic Roster -->
+    <div class="bg-slate-900/95 border border-slate-800 rounded-2xl p-2 flex flex-col gap-2">
+      <div class="grid grid-cols-2 gap-1.5">
+        <button type="button" onclick="setWorkflowMode('quick')" id="modeBtnQuickScribe" class="py-2 px-2.5 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1.5 border-slate-800 bg-slate-950 text-slate-400">
+          <span>⚡</span>
+          <span>On-The-Fly Scribe</span>
+        </button>
+        <button type="button" onclick="setWorkflowMode('roster')" id="modeBtnClinicRoster" class="py-2 px-2.5 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1.5 border-blue-500 bg-blue-600/20 text-white">
+          <span>📅</span>
+          <span>Clinic Roster (<span id="modeRosterCount">0</span>)</span>
+        </button>
+      </div>
+      <!-- Active On-The-Fly Banner (Shown when in Quick Scribe mode or detached from roster) -->
+      <div id="quickScribeBanner" class="hidden px-3 py-2 rounded-xl bg-indigo-950/50 border border-indigo-500/40 flex flex-wrap items-center justify-between gap-2">
+        <div class="min-w-0">
+          <span class="text-[11px] font-bold text-indigo-200">⚡ On-The-Fly Scribe Mode (No Pre-Existing Encounter Needed)</span>
+          <p class="text-[10px] text-slate-300">Pick any template from the dropdown below and dictate immediately. Your scheduled clinic roster will not be overwritten.</p>
+        </div>
+        <div class="flex items-center gap-1.5 shrink-0">
+          <button type="button" onclick="startOnTheFlyDictation()" class="px-2 py-1 rounded-lg bg-slate-900 border border-slate-700 text-[10px] font-semibold text-slate-200 hover:text-white">
+            🧹 Clear / New Note
+          </button>
+          <button type="button" onclick="pinOnTheFlyToRoster()" class="px-2 py-1 rounded-lg bg-emerald-600/30 border border-emerald-500/50 text-[10px] font-semibold text-emerald-200 hover:bg-emerald-600/40">
+            📌 Save to Roster
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Clinic Date Selector & Batch Schedule Uploader -->
-    <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-3.5 flex flex-col gap-3">
+    <div id="clinicScheduleCard" class="bg-slate-900/90 border border-slate-800 rounded-2xl p-3.5 flex flex-col gap-3">
       <div class="flex items-center justify-between">
         <label class="text-[10px] text-slate-400 font-semibold tracking-wider uppercase">Clinic Date & Schedule Roster</label>
         <span class="text-[10px] text-blue-400 font-mono" id="activeDateDisplay">Loaded</span>
@@ -218,7 +250,11 @@
         </div>
       </div>
       <div id="implantScanStatus" class="hidden mb-2 p-2 rounded-xl border border-emerald-500/40 bg-emerald-950/30 text-emerald-200 text-xs"></div>
-      <select id="templateSelect" onchange="onModuleChanged()" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white font-medium focus:outline-none focus:border-blue-500">
+      <select id="templateSelect" onchange="onModuleChanged(this.value)" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white font-medium focus:outline-none focus:border-blue-500">
+        <optgroup label="On-The-Fly Quick Scribe (Doximity Style)">
+          <option value="auto_detect">✨ AI Auto-Detect Template from Dictation (Smart Route)</option>
+          <option value="general_soap">General Orthopedic SOAP / Add-On Consult Note</option>
+        </optgroup>
         <optgroup label="Post-Operative Surveillance">
           <option value="postop">Post-Operative Follow-Up (2W / 6W / 12W / 1Y)</option>
         </optgroup>
@@ -375,16 +411,27 @@
       </div>
     </div>
 
-    <!-- Raw Notes, Dictation & Gemini AI Parse Engine (2-Stage Pre-Visit -> Day-Of Merge) -->
-    <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4">
+    <!-- Raw Notes, Dictation & Gemini AI Parse Engine (2-Stage Pre-Visit -> Day-Of Merge + On-The-Fly Dropdown) -->
+    <div id="dictationWorkspaceCard" class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4">
       <div class="flex flex-wrap justify-between items-center gap-1.5 mb-2">
         <div class="flex items-center gap-2">
           <label class="text-[10px] text-slate-400 font-semibold tracking-wider uppercase" id="dictationBoxHeaderLabel">Dictation &amp; Clinical Notes</label>
           <span class="text-[10px] text-purple-400 font-medium">Direct Gemini 3.8 Flash</span>
         </div>
-        <button type="button" onclick="transitionToDayOfDictation()" id="startDayOfBtn" class="px-2 py-0.5 rounded-lg bg-blue-600/20 border border-blue-500/40 text-[10px] font-semibold text-blue-300 hover:bg-blue-600/30" title="Lock current Pre-Visit Screening notes above and open a clean Day-Of Clinic Dictation box that merges into the final note">
-          ➕ Start Day-Of Dictation (Preserve Pre-Screen)
-        </button>
+        <div class="flex flex-wrap items-center gap-1.5">
+          <button type="button" onclick="startOnTheFlyDictation()" class="px-2 py-0.5 rounded-lg bg-indigo-600/25 border border-indigo-500/50 text-[10px] font-semibold text-indigo-200 hover:bg-indigo-600/40" title="Detach from any scheduled encounter and start a fresh on-the-fly dictation right now">
+            ⚡ New On-The-Fly Dictation
+          </button>
+          <button type="button" onclick="transitionToDayOfDictation()" id="startDayOfBtn" class="px-2 py-0.5 rounded-lg bg-blue-600/20 border border-blue-500/40 text-[10px] font-semibold text-blue-300 hover:bg-blue-600/30" title="Lock current Pre-Visit Screening notes above and open a clean Day-Of Clinic Dictation box that merges into the final note">
+            ➕ Start Day-Of Dictation (Preserve Pre-Screen)
+          </button>
+        </div>
+      </div>
+
+      <!-- Inline Quick-Select Template Dropdown (Doximity Scribe Style — Always right above the Dictation Box) -->
+      <div class="mb-2.5 flex items-center gap-2 bg-slate-950/90 border border-slate-800 rounded-xl px-2.5 py-1.5">
+        <span class="text-[10px] font-bold uppercase tracking-wider text-indigo-300 shrink-0">Template:</span>
+        <select id="quickTemplateSelect" onchange="onModuleChanged(this.value)" class="flex-1 bg-transparent border-0 text-xs text-white font-medium focus:outline-none"></select>
       </div>
 
       <!-- Preserved Pre-Visit Screening Context Box (Shown when transitioning from Pre-Visit Prep to In-Clinic) -->
@@ -1889,6 +1936,14 @@ NOTES:
       return Array.isArray(parsed) ? parsed : [];
     }
 
+    function syncQuickTemplateDropdown() {
+      const mainSel = document.getElementById("templateSelect");
+      const quickSel = document.getElementById("quickTemplateSelect");
+      if (!mainSel || !quickSel) return;
+      quickSel.innerHTML = mainSel.innerHTML;
+      quickSel.value = mainSel.value;
+    }
+
     function loadCustomTemplatesIntoDropdown() {
       const group = document.getElementById("customTemplateGroup");
       if (!group) return;
@@ -1900,6 +1955,107 @@ NOTES:
         opt.innerText = t.title;
         group.appendChild(opt);
       });
+      syncQuickTemplateDropdown();
+    }
+
+    // --- Doximity-Style On-The-Fly Quick Scribe Mode (No Pre-Existing Encounter Required) ---
+    let currentWorkflowMode = "roster"; // "quick" | "roster"
+
+    function setWorkflowMode(mode) {
+      currentWorkflowMode = mode === "quick" ? "quick" : "roster";
+      const btnQuick = document.getElementById("modeBtnQuickScribe");
+      const btnRoster = document.getElementById("modeBtnClinicRoster");
+      const scheduleCard = document.getElementById("clinicScheduleCard");
+      const quickBanner = document.getElementById("quickScribeBanner");
+
+      if (btnQuick && btnRoster) {
+        btnQuick.className = currentWorkflowMode === "quick"
+          ? "py-2 px-2.5 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1.5 border-indigo-500 bg-indigo-600/25 text-white"
+          : "py-2 px-2.5 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1.5 border-slate-800 bg-slate-950 text-slate-400";
+        btnRoster.className = currentWorkflowMode === "roster"
+          ? "py-2 px-2.5 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1.5 border-blue-500 bg-blue-600/20 text-white"
+          : "py-2 px-2.5 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1.5 border-slate-800 bg-slate-950 text-slate-400";
+      }
+
+      if (scheduleCard) {
+        scheduleCard.classList.toggle("hidden", currentWorkflowMode === "quick");
+      }
+      if (quickBanner) {
+        quickBanner.classList.toggle("hidden", currentWorkflowMode !== "quick" && Boolean(activeEncounterId));
+      }
+
+      if (currentWorkflowMode === "quick" && activeEncounterId) {
+        startOnTheFlyDictation(false);
+      }
+    }
+
+    function activateQuickScribeMode() {
+      setWorkflowMode("quick");
+      startOnTheFlyDictation(true);
+    }
+
+    function startOnTheFlyDictation(scrollAndFocus = true) {
+      activeEncounterId = null;
+      activeEncounterStage = "In-Clinic";
+      matchedCaseData = null;
+      setManualNoteEditLock(false);
+
+      document.getElementById("ptName").value = "";
+      document.getElementById("ptAgeGender").value = "";
+      document.getElementById("postOpInstructions").value = "";
+      if (document.getElementById("xrayFindingsInput")) document.getElementById("xrayFindingsInput").value = "";
+      if (document.getElementById("preVisitOrdersInput")) document.getElementById("preVisitOrdersInput").value = "";
+      if (document.getElementById("preVisitScreeningInput")) document.getElementById("preVisitScreeningInput").value = "";
+      document.getElementById("dictationBox").value = "";
+      document.getElementById("matchAlert").classList.add("hidden");
+
+      const tag = document.getElementById("activeEncounterTag");
+      if (tag) {
+        tag.innerText = "⚡ On-The-Fly Scribe";
+        tag.className = "text-[10px] bg-indigo-600/25 text-indigo-200 border border-indigo-500/50 px-2 py-0.5 rounded-full font-semibold";
+        tag.classList.remove("hidden");
+      }
+
+      const quickBanner = document.getElementById("quickScribeBanner");
+      if (quickBanner) quickBanner.classList.remove("hidden");
+
+      resetAddonFieldsToDefault();
+      updateStageButtons();
+      updatePreVisitContextUI();
+      renderTemplateFields();
+      renderClinicRosterUI();
+
+      if (scrollAndFocus) {
+        const dictBox = document.getElementById("dictationBox");
+        if (dictBox) {
+          dictBox.scrollIntoView({ behavior: "smooth", block: "center" });
+          setTimeout(() => dictBox.focus(), 150);
+        }
+      }
+    }
+
+    function pinOnTheFlyToRoster() {
+      const ptInput = document.getElementById("ptName");
+      const rawDict = document.getElementById("dictationBox").value.trim();
+      const cues = extractLocalClinicalCues(rawDict);
+      if (ptInput && !ptInput.value.trim()) {
+        ptInput.value = cues.patientName || `Add-On Pt (${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`;
+      }
+      if (!activeEncounterId) {
+        activeEncounterId = "enc_" + Date.now();
+      }
+      autoSaveCurrentEncounter(true);
+      const tag = document.getElementById("activeEncounterTag");
+      if (tag) {
+        tag.innerText = "Synced to Roster ✓";
+        tag.className = "text-[10px] bg-blue-600/20 text-blue-300 border border-blue-500/40 px-2 py-0.5 rounded-full font-medium";
+        tag.classList.remove("hidden");
+      }
+      if (currentWorkflowMode !== "quick") {
+        const quickBanner = document.getElementById("quickScribeBanner");
+        if (quickBanner) quickBanner.classList.add("hidden");
+      }
+      renderClinicRosterUI();
     }
 
     function toggleTemplateStudio() {
@@ -2834,6 +2990,7 @@ NOTES:
       document.getElementById("ptName").value = enc.name;
       document.getElementById("ptAgeGender").value = enc.ageGender;
       document.getElementById("templateSelect").value = enc.moduleVal || "new_hip";
+      syncQuickTemplateDropdown();
       document.getElementById("postOpInstructions").value = (enc.planSummary && enc.planSummary !== "Routine evaluation") ? enc.planSummary : "";
       if (document.getElementById("xrayFindingsInput")) {
         document.getElementById("xrayFindingsInput").value = enc.xrayFindings || "";
@@ -2845,7 +3002,16 @@ NOTES:
         document.getElementById("preVisitScreeningInput").value = enc.preVisitScreening || "";
       }
       document.getElementById("dictationBox").value = enc.dictation || "";
-      document.getElementById("activeEncounterTag").classList.remove("hidden");
+      const tag = document.getElementById("activeEncounterTag");
+      if (tag) {
+        tag.innerText = "Synced";
+        tag.className = "text-[10px] bg-blue-600/20 text-blue-300 border border-blue-500/40 px-2 py-0.5 rounded-full font-medium";
+        tag.classList.remove("hidden");
+      }
+      if (currentWorkflowMode !== "quick") {
+        const quickBanner = document.getElementById("quickScribeBanner");
+        if (quickBanner) quickBanner.classList.add("hidden");
+      }
 
       setClosure(enc.closure || "default");
       updateStageButtons();
@@ -2919,6 +3085,8 @@ ${enc.planSummary || 'Standard orthopedic management and follow-up protocol.'}`;
       const encounters = getClinicEncounters(currentClinicDate);
       document.getElementById("clinicCount").innerText = encounters.length;
       document.getElementById("rosterBadgeCount").innerText = encounters.length;
+      const modeCnt = document.getElementById("modeRosterCount");
+      if (modeCnt) modeCnt.innerText = encounters.length;
       document.getElementById("activeDateDisplay").innerText = currentClinicDate;
 
       const exportedList = encounters.filter(e => e.exported === true);
@@ -3357,6 +3525,15 @@ Extract and return ONLY valid JSON matching:
       if (!text) return {};
       const cues = {};
 
+      // Extract spoken patient name if dictated on-the-fly (e.g., "Patient: Smith, John." or "John Smith is a 69yo M")
+      const explicitPtMatch = text.match(/^(?:patient(?:\s+name)?\s*[:=-]\s*)([A-Z][a-zA-Z'-]+(?:,\s*[A-Z][a-zA-Z'-]+|\s+[A-Z][a-zA-Z'-]+))/i);
+      const leadingNameMatch = text.match(/^([A-Z][a-z'-]+,\s*[A-Z][a-z'-]+|[A-Z][a-z'-]+\s+[A-Z][a-z'-]+)\s*(?:,\s*|\s+is\s+a\s+|\s+)(\d{2,3})\s*(?:-?\s*year\s*-?\s*old|yo|y\/o)?\s*(male|female|man|woman|m|f)\b/);
+      if (explicitPtMatch) {
+        cues.patientName = explicitPtMatch[1].trim();
+      } else if (leadingNameMatch && !/^(?:Right|Left|Bilateral|New|Post|Acute|Chronic|Patient)\b/i.test(leadingNameMatch[1])) {
+        cues.patientName = leadingNameMatch[1].trim();
+      }
+
       // Extract age + gender shorthand (e.g. "69 year old male", "69yo M", "69M", "72-year-old female")
       const ageSexMatch = text.match(/\b(\d{2,3})\s*(?:-?\s*year\s*-?\s*old|yo|y\/o)?\s*(male|female|man|woman|m|f)\b/i);
       if (ageSexMatch) {
@@ -3372,13 +3549,25 @@ Extract and return ONLY valid JSON matching:
       else if (/\bleft\b/i.test(text)) cues.laterality = "Left";
 
       // Infer clinical module if obvious from dictation
-      if (/\b(?:post-?op|s\/p|incision check|follow-?up)\b/i.test(text)) {
+      if (/\b(?:operative report|ebl\b| bikini incision|persona cr|persona ps|z1 stem|g7 cup)\b/i.test(text)) {
+        if (/\b(?:tha|total hip|g7|z1)\b/i.test(text)) cues.detectedModule = "op_da_tha";
+        else if (/\b(?:uka|oxford|unicompartmental)\b/i.test(text)) cues.detectedModule = "op_uka";
+        else if (/\b(?:tka|total knee|persona)\b/i.test(text)) cues.detectedModule = "op_primary_tka";
+      } else if (/\b(?:telehealth|telephone|phone call|audio-only|called patient)\b/i.test(text)) {
+        cues.detectedModule = "telehealth";
+      } else if (/\b(?:post-?op|s\/p|incision check|2-week|6-week|12-week|1-year follow-?up)\b/i.test(text)) {
         cues.detectedModule = "postop";
       } else if (/\b(?:painful|failed|aseptic loosening|periprosthetic joint infection|pji)\b/i.test(text) && /\b(?:tka|tha|arthroplasty|replacement)\b/i.test(text)) {
         cues.detectedModule = "painful_joint";
-      } else if (/\bhip\b/i.test(text) && /\b(?:oa|osteoarthritis|avn|avascular necrosis|dysplasia|djd|arthritis|consult)\b/i.test(text)) {
+      } else if (/\b(?:femoral neck fracture|intertrochanteric fracture|subtrochanteric fracture|garden iv|hemiarthroplasty|cephalomedullary nail)\b/i.test(text)) {
+        cues.detectedModule = "hip_fx";
+      } else if (/\b(?:distal radius fracture|ankle fracture|closed reduction|sugar-?tong|splint applied|ed consult)\b/i.test(text)) {
+        cues.detectedModule = "gen_fx";
+      } else if (/\b(?:acl tear|meniscus tear|lachman|pivot shift|rotator cuff tear|labral tear)\b/i.test(text)) {
+        cues.detectedModule = "sports";
+      } else if (/\bhip\b/i.test(text) && /\b(?:oa|osteoarthritis|avn|avascular necrosis|dysplasia|djd|arthritis|consult|groin pain|tha)\b/i.test(text)) {
         cues.detectedModule = "new_hip";
-      } else if (/\bknee\b/i.test(text) && /\b(?:oa|osteoarthritis|tricompartmental|medial compartment|djd|arthritis|consult)\b/i.test(text)) {
+      } else if (/\bknee\b/i.test(text) && /\b(?:oa|osteoarthritis|tricompartmental|medial compartment|djd|arthritis|consult|tka|uka)\b/i.test(text)) {
         cues.detectedModule = "new_knee";
       }
 
@@ -3455,11 +3644,12 @@ Extract and return ONLY valid JSON matching:
       const localCues = extractLocalClinicalCues(combinedContextText);
 
       // Auto-route clinical module if detected by AI or local cues
-      const targetMod = parsed.detectedModule || localCues.detectedModule;
       const tmplSelect = document.getElementById("templateSelect");
+      const targetMod = parsed.detectedModule || localCues.detectedModule || (tmplSelect && tmplSelect.value === "auto_detect" ? "general_soap" : null);
       if (targetMod && tmplSelect && Array.from(tmplSelect.options).some(o => o.value === targetMod)) {
         if (tmplSelect.value !== targetMod) {
           tmplSelect.value = targetMod;
+          syncQuickTemplateDropdown();
           const badge = document.getElementById("autoRoutedBadge");
           if (badge) {
             badge.innerText = `AI Auto-Routed: ${targetMod}`;
@@ -3469,8 +3659,9 @@ Extract and return ONLY valid JSON matching:
         }
       }
 
-      if (parsed.patientName && !document.getElementById("ptName").value) {
-        document.getElementById("ptName").value = parsed.patientName;
+      const resolvedPtName = parsed.patientName || localCues.patientName;
+      if (resolvedPtName && !document.getElementById("ptName").value) {
+        document.getElementById("ptName").value = resolvedPtName;
       }
       const resolvedAgeGender = parsed.ageGender || localCues.ageGender;
       if (resolvedAgeGender) document.getElementById("ptAgeGender").value = resolvedAgeGender;
@@ -3594,7 +3785,7 @@ Extract structured clinical parameters from this raw physician dictation and ret
 Current Selected Module: "${moduleType}"
 
 JSON schema keys:
-- "detectedModule": one of ["new_hip", "new_knee", "painful_joint", "postop", "telehealth", "sports", "hip_fx", "gen_fx", "op_da_tha", "op_primary_tka", "op_hip_hemi", "op_rev_tka", "op_uka", "op_stage1_pji", "op_stage2_tha", "op_lat_plateau", "op_med_plateau", "op_bicondylar_plateau", "op_clavicle", "op_femur_fx"] or null if current module should be kept
+- "detectedModule": one of ["new_hip", "new_knee", "painful_joint", "postop", "telehealth", "sports", "hip_fx", "gen_fx", "general_soap", "op_da_tha", "op_primary_tka", "op_hip_hemi", "op_rev_tka", "op_uka", "op_stage1_pji", "op_stage2_tha", "op_lat_plateau", "op_med_plateau", "op_bicondylar_plateau", "op_clavicle", "op_femur_fx"] or null if current module should be kept
 - "patientName": string or null ("Last, First" format if mentioned)
 - "ageGender": string or null (e.g. "69M", "64F")
 - "laterality": "Right", "Left", or "Bilateral" (or null)
@@ -4054,7 +4245,12 @@ Dictation:
       return "Fascia and subcutaneous tissues closed with barbed 3-0 Stratafix. Skin reapproximated with Sylke suture strips and sterile Aquacel Ag surgical barrier dressing.";
     }
 
-    function onModuleChanged() {
+    function onModuleChanged(selectedVal) {
+      const mainSel = document.getElementById("templateSelect");
+      if (selectedVal && mainSel) {
+        mainSel.value = selectedVal;
+      }
+      syncQuickTemplateDropdown();
       setManualNoteEditLock(false);
       renderTemplateFields();
       autoSaveCurrentEncounter();
@@ -4063,10 +4259,24 @@ Dictation:
     // --- Dynamic Form Renderer ---
     function renderTemplateFields() {
       const type = document.getElementById("templateSelect").value;
+      syncQuickTemplateDropdown();
       const form = document.getElementById("dynamicForm");
       let html = "";
 
-      if (type.startsWith("custom_")) {
+      if (type === "auto_detect" || type === "general_soap") {
+        html = `
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Target Joint / Region</label>
+              <input id="soapJointRegion" oninput="assembleNote()" type="text" placeholder="e.g. Right Hip, Left Knee, Shoulder" value="Orthopedic Musculoskeletal" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+            </div>
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Focused Exam Summary</label>
+              <input id="soapExamSummary" oninput="assembleNote()" type="text" value="Skin intact, functional ROM, stable, distal neurovascular status 5/5 & 2+ pulses" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+            </div>
+          </div>
+        `;
+      } else if (type.startsWith("custom_")) {
         const idx = parseInt(type.split("_")[1]);
         const customTmpl = getCustomTemplates()[idx] || { title: "Custom Procedure", implants: "Documented", body: "" };
         html = `
@@ -4611,15 +4821,16 @@ Dictation:
       if (isNoteManuallyEdited && !forceSync) {
         return;
       }
-      const type = document.getElementById("templateSelect").value;
+      const rawType = document.getElementById("templateSelect").value;
       const rawDictation = document.getElementById("dictationBox").value.trim();
       const preVisitText = document.getElementById("preVisitScreeningInput") ? document.getElementById("preVisitScreeningInput").value.trim() : "";
       const combinedRawDictation = (preVisitText && rawDictation && !rawDictation.includes(preVisitText))
         ? `${preVisitText} ${rawDictation}`
         : (rawDictation || preVisitText);
       const localCues = extractLocalClinicalCues(combinedRawDictation);
+      const type = (rawType === "auto_detect") ? (localCues.detectedModule || "general_soap") : rawType;
 
-      const ptName = document.getElementById("ptName").value.trim() || "[Patient Name]";
+      const ptName = document.getElementById("ptName").value.trim() || localCues.patientName || "[Patient Name]";
       const ageGender = document.getElementById("ptAgeGender").value.trim() || localCues.ageGender || "[Age/Gender]";
       const instructions = document.getElementById("postOpInstructions").value.trim() || localCues.oneLinerSummary || "Standard perioperative arthroplasty & DVT prophylaxis protocol.";
       const preloadedXray = (document.getElementById("xrayFindingsInput") ? document.getElementById("xrayFindingsInput").value.trim() : "") || localCues.xrayFindings || "";
@@ -4627,7 +4838,36 @@ Dictation:
       const clinicalNarrative = localCues.polishedNarrative || combinedRawDictation;
       let note = "";
 
-      if (type.startsWith("custom_")) {
+      if (type === "general_soap") {
+        const lat = localCues.laterality || "Focused";
+        const regionInput = document.getElementById("soapJointRegion") ? document.getElementById("soapJointRegion").value.trim() : "";
+        const region = (regionInput && regionInput !== "Orthopedic Musculoskeletal") ? regionInput : `${lat} Musculoskeletal Region`;
+        const examSummary = document.getElementById("soapExamSummary")
+          ? document.getElementById("soapExamSummary").value.trim()
+          : "Skin intact without erythema or effusion. Range of motion and stability evaluated. Distal motor 5/5, sensation intact, pulses 2+.";
+        note = `ORTHOPEDIC CLINICAL EVALUATION (ON-THE-FLY SOAP / CONSULT NOTE)
+PATIENT: ${ptName} | DEMOGRAPHICS: ${ageGender}
+DATE OF SERVICE: ${new Date().toLocaleDateString()}
+ATTENDING SURGEON: Dr. Spencer Schulte, MD (Orthopedic Surgery)
+FACILITY: Eisenhower Army Medical Center (DDEAMC)
+BILLING & CODING: Target Region: ${region} | E/M Level: 99203 / 99204 / 99214
+
+SUBJECTIVE / HISTORY OF PRESENT ILLNESS (HPI):
+${clinicalNarrative || `${ageGender} patient presents for orthopedic evaluation and management regarding ${region}.`}
+
+OBJECTIVE / PHYSICAL EXAMINATION:
+- Constitutional: Alert, oriented, in no acute distress.
+- Musculoskeletal (${region}): ${examSummary}
+- Distal Neurovascular Status: Intact motor, sensory, and vascular examination distally; compartments soft and compressible.
+
+INDEPENDENT RADIOGRAPHIC & DIAGNOSTIC INTERPRETATION:
+${preloadedXray ? `Personally reviewed and independently interpreted by Dr. Spencer Schulte, MD: ${preloadedXray}.` : "Available diagnostic imaging and clinical records reviewed personally by Dr. Spencer Schulte, MD."}${preloadedOrders ? `\n- Diagnostic Workup / Orders: ${preloadedOrders}` : ""}
+
+ASSESSMENT & PLAN:
+1. Clinical Impression & Management: ${instructions}
+2. Counseling & Return Precautions: Discussed diagnosis, nonoperative versus surgical treatment options, rehabilitation expectations, and explicit return precautions with patient, who expressed full understanding and agreement.`;
+
+      } else if (type.startsWith("custom_")) {
         const idx = parseInt(type.split("_")[1]);
         const customTmpl = getCustomTemplates()[idx] || { title: "Custom Procedure", implants: "Documented", body: "OPERATIVE REPORT\nPATIENT: {PATIENT_NAME}\nIMPLANTS: {IMPLANTS}\nNOTES: {DICTATION}" };
         const ebl = document.getElementById("opEbl") ? document.getElementById("opEbl").value : "100 cc";
