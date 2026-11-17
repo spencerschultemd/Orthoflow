@@ -165,7 +165,7 @@
             <span id="rosterCompletionSummary" class="text-[10px] font-mono text-slate-400"></span>
           </div>
           <div class="flex items-center gap-2">
-            <button type="button" onclick="syncClinicEncountersWithCaseDB(currentClinicDate, true)" class="px-2 py-0.5 rounded-lg bg-emerald-600/20 border border-emerald-500/40 text-[10px] font-semibold text-emerald-300 hover:bg-emerald-600/30" title="Cross-reference all patients on this clinic date against your Surgical Case DB and pull over procedure, DOS, implants, closure, and post-op protocol">
+            <button type="button" onclick="syncAllSavedClinicDatesWithCaseDB(true)" class="px-2 py-0.5 rounded-lg bg-emerald-600/20 border border-emerald-500/40 text-[10px] font-semibold text-emerald-300 hover:bg-emerald-600/30" title="Cross-reference all patients on today's and all saved clinic dates against your Surgical Case DB and pull over procedure, DOS, implants, closure, and post-op protocol">
               🔗 Sync Case DB Post-Ops
             </button>
             <button type="button" onclick="openRemainingNotesModal()" id="exportRemainingHeaderBtn" class="px-2 py-0.5 rounded-lg bg-amber-600/20 border border-amber-500/40 text-[10px] font-semibold text-amber-300 hover:bg-amber-600/30">
@@ -970,7 +970,7 @@ NOTES:
 
       <!-- Two-Stage Gemini Pipeline & Custom Vocabulary Controls -->
       <div class="flex flex-wrap items-center justify-between gap-2 bg-slate-900/60 border border-slate-800/80 rounded-xl px-3 py-2">
-        <span class="text-[11px] font-medium text-indigo-200">🎧 Stage 1: <code class="text-emerald-300">gemini-3.5-transcribe</code> → Stage 2: <code class="text-purple-300">gemini-2.5-flash</code></span>
+        <span class="text-[11px] font-medium text-indigo-200">🎧 Stage 1: <code class="text-emerald-300">gemini-3.5-transcribe</code> → Stage 2: <code class="text-purple-300">gemini-3.8-flash</code></span>
         <div class="flex items-center gap-1.5">
           <button type="button" onclick="toggleOrthoLibraryModal()" class="px-2.5 py-1 rounded-lg bg-emerald-600/20 border border-emerald-500/50 hover:bg-emerald-600/35 text-[10px] font-semibold text-emerald-300">
             📚 Custom Vocabulary (<span id="focusModalVocabPillCount">135</span>/250)
@@ -1384,6 +1384,9 @@ NOTES:
             });
           }
 
+          if (typeof syncAllSavedClinicDatesWithCaseDB === "function") {
+            syncAllSavedClinicDatesWithCaseDB(false);
+          }
           renderClinicRosterUI();
           renderWaitlistModalList();
           updateStorageQuotaBadge();
@@ -1485,41 +1488,82 @@ NOTES:
     // --- Resilient Ultra-Fast Multi-Model Gemini Caller (Cached Fast Model + Zero-Thinking Latency + 8s Timeout) ---
     let currentAiAbortController = null;
 
-    async function callGeminiDirect(partsArray, requireJson = true) {
-      const apiKey = getGeminiApiKey().trim();
-      if (!apiKey) {
-        toggleApiKeyModal();
-        throw new Error("Please enter your Gemini API key first.");
-      }
+    const disabledGeminiModels = new Set();
 
+    function getOrderedGeminiFlashModels() {
       const baseModels = [
-        "gemini-2.5-flash",
-        "gemini-2.0-flash",
-        "gemini-2.5-flash-lite",
         "gemini-3.8-flash",
-        "gemini-3.5-flash"
+        "gemini-3.0-flash",
+        "gemini-3-flash-preview",
+        "gemini-3.5-flash",
+        "gemini-2.5-flash-lite",
+        "gemini-2.0-flash",
+        "gemini-2.5-flash"
       ];
-      const cachedFastModel = sessionStorage.getItem("orthoflow_fast_model");
-      const models = cachedFastModel && baseModels.includes(cachedFastModel)
-        ? [cachedFastModel, ...baseModels.filter(m => m !== cachedFastModel)]
-        : baseModels;
+      const verified = localStorage.getItem("orthoflow_verified_model") || sessionStorage.getItem("orthoflow_fast_model") || "";
+      const ordered = [];
+      if (verified && !disabledGeminiModels.has(verified)) {
+        ordered.push(verified);
+      }
+      for (const m of baseModels) {
+        if (!disabledGeminiModels.has(m) && !ordered.includes(m)) {
+          ordered.push(m);
+        }
+      }
+      return ordered;
+    }
 
+    function extractSuggestedModelFromError(errMsg, failedModel) {
+      const s = String(errMsg || "");
+      if (/no longer available|not found|not supported|deprecated/i.test(s) && failedModel) {
+        disabledGeminiModels.add(failedModel);
+        if (localStorage.getItem("orthoflow_verified_model") === failedModel) {
+          localStorage.removeItem("orthoflow_verified_model");
+        }
+        if (sessionStorage.getItem("orthoflow_fast_model") === failedModel) {
+          sessionStorage.removeItem("orthoflow_fast_model");
+        }
+      }
+      const m = s.match(/(?:use|try)\s+models\/([a-z0-9._-]+)/i) || s.match(/models\/(gemini-[a-z0-9._-]+)/i);
+      if (m && m[1] && m[1] !== failedModel && !disabledGeminiModels.has(m[1])) {
+        return m[1];
+      }
+      return null;
+    }
+
+    async function discoverAvailableGeminiFlashModels(apiKey) {
+      try {
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`);
+        if (!res.ok) return [];
+        const data = await res.json().catch(() => ({}));
+        const list = Array.isArray(data.models) ? data.models : [];
+        return list
+          .filter(m => m && m.name && (!Array.isArray(m.supportedGenerationMethods) || m.supportedGenerationMethods.includes("generateContent")))
+          .map(m => String(m.name).replace(/^models\//, ""))
+          .filter(id => /flash/i.test(id) && !/tts|image|embedding|aqa/i.test(id) && !disabledGeminiModels.has(id));
+      } catch (e) {
+        return [];
+      }
+    }
+
+    async function executeGeminiGenerateContentWithFallback(apiKey, buildBodyFn, timeoutMs = 25000) {
+      const queue = [...getOrderedGeminiFlashModels()];
+      const tried = new Set();
+      let discoveredAlready = false;
       let lastError = "Model unavailable";
 
-      for (const model of models) {
+      while (queue.length > 0) {
+        const model = queue.shift();
+        if (!model || tried.has(model) || disabledGeminiModels.has(model)) continue;
+        tried.add(model);
+
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
-        const bodyObj = { contents: [{ parts: partsArray }] };
-        if (requireJson) {
-          bodyObj.generationConfig = { responseMimeType: "application/json" };
-          if (model.startsWith("gemini-2.5")) {
-            bodyObj.generationConfig.thinkingConfig = { thinkingBudget: 0 };
-          }
-        }
+        let bodyObj = buildBodyFn(model, true);
 
         for (let attempt = 0; attempt < 2; attempt++) {
           const controller = new AbortController();
           currentAiAbortController = controller;
-          const timeoutId = setTimeout(() => controller.abort(), 8500);
+          const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
           let res;
           try {
@@ -1535,7 +1579,7 @@ NOTES:
           } catch (fetchErr) {
             clearTimeout(timeoutId);
             if (fetchErr && fetchErr.name === "AbortError") {
-              lastError = `Request timed out after 8.5s on ${model}`;
+              lastError = `Request timed out on ${model}`;
               break;
             }
             throw fetchErr;
@@ -1547,22 +1591,60 @@ NOTES:
           const candidateText = data && data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0]
             ? data.candidates[0].content.parts[0].text
             : null;
-          if (res.ok && !data.error && candidateText != null) {
+          if (res.ok && !data.error && candidateText != null && String(candidateText).trim() !== "") {
+            localStorage.setItem("orthoflow_verified_model", model);
             sessionStorage.setItem("orthoflow_fast_model", model);
-            return candidateText;
+            return String(candidateText).trim();
           }
 
-          lastError = data.error ? data.error.message : `HTTP ${res.status}`;
-          if (res.status === 503 || res.status === 429 || lastError.toLowerCase().includes("high demand")) {
-            await new Promise(r => setTimeout(r, 700));
-            continue;
-          } else {
+          lastError = data.error ? data.error.message : `HTTP ${res.status} on ${model}`;
+          const suggested = extractSuggestedModelFromError(lastError, model);
+          if (suggested && !tried.has(suggested)) {
+            queue.unshift(suggested);
             break;
+          }
+
+          // If a model rejected thinkingConfig or responseSchema with 400, retry once on the same model with compatibility config
+          if (res.status === 400 && attempt === 0 && /thinking|schema|generation_config|generationConfig/i.test(lastError)) {
+            bodyObj = buildBodyFn(model, false);
+            continue;
+          }
+
+          if (res.status === 503 || res.status === 429 || /high demand|overloaded/i.test(lastError)) {
+            await new Promise(r => setTimeout(r, 600));
+            continue;
+          }
+          break;
+        }
+
+        if (queue.length === 0 && !discoveredAlready) {
+          discoveredAlready = true;
+          const discovered = await discoverAvailableGeminiFlashModels(apiKey);
+          for (const dm of discovered) {
+            if (!tried.has(dm)) queue.push(dm);
           }
         }
       }
 
       throw new Error(lastError);
+    }
+
+    async function callGeminiDirect(partsArray, requireJson = true) {
+      const apiKey = getGeminiApiKey().trim();
+      if (!apiKey) {
+        toggleApiKeyModal();
+        throw new Error("Please enter your Gemini API key first.");
+      }
+      return await executeGeminiGenerateContentWithFallback(apiKey, (model, allowExtraConfig) => {
+        const bodyObj = { contents: [{ parts: partsArray }] };
+        if (requireJson) {
+          bodyObj.generationConfig = { responseMimeType: "application/json" };
+          if (allowExtraConfig && model.startsWith("gemini-2.5")) {
+            bodyObj.generationConfig.thinkingConfig = { thinkingBudget: 0 };
+          }
+        }
+        return bodyObj;
+      }, 12000);
     }
 
     async function saveAndTestGeminiKey() {
@@ -1609,34 +1691,118 @@ NOTES:
       localStorage.setItem("orthoflow_surgical_cases", JSON.stringify(cases));
       const countEl = document.getElementById("registryCount");
       if (countEl) countEl.innerText = cases.length;
-      if (typeof syncClinicEncountersWithCaseDB === "function" && typeof currentClinicDate === "string" && currentClinicDate) {
-        syncClinicEncountersWithCaseDB(currentClinicDate, false);
+      if (typeof syncAllSavedClinicDatesWithCaseDB === "function") {
+        syncAllSavedClinicDatesWithCaseDB(true);
+      } else if (typeof syncClinicEncountersWithCaseDB === "function" && typeof currentClinicDate === "string" && currentClinicDate) {
+        syncClinicEncountersWithCaseDB(currentClinicDate, true);
       }
     }
 
-    // Token-based & structured name matcher (matches "Last, First Middle Jr" and "First Last" seamlessly across military ranks/suffixes/initials)
+    // Token-based & structured name matcher (matches "Last, First Middle Jr", "First Last", "LAST FIRST", nicknames, and 1-char schedule OCR typos)
     const IGNORED_NAME_SUFFIXES_AND_RANKS = new Set([
-      "jr", "sr", "ii", "iii", "iv", "ret", "retired", "mr", "mrs", "ms", "miss", "dr", "md", "do", "pa",
+      "jr", "sr", "ii", "iii", "iv", "ret", "retired", "mr", "mrs", "ms", "miss", "dr", "md", "do", "pa", "np", "rn",
       "col", "ltc", "maj", "cpt", "lt", "1lt", "2lt", "gen", "bg", "mg", "ltg",
       "sfc", "ssg", "msg", "1sg", "sgm", "csm", "sgt", "cpl", "spc", "pfc", "pvt",
-      "cw2", "cw3", "cw4", "cw5", "wo1", "usa", "usaf", "usn", "usmc"
+      "cw2", "cw3", "cw4", "cw5", "wo1", "usa", "usaf", "usn", "usmc",
+      "fmp", "dep", "sp", "civ", "ad", "postop", "post", "op", "wk", "wks", "week", "weeks",
+      "mo", "mos", "month", "months", "yr", "yrs", "year", "years", "pod",
+      "tha", "tka", "uka", "muka", "orif", "hemi", "hip", "knee", "right", "left", "bilateral",
+      "eval", "consult", "followup", "fu", "wound", "check", "staple", "staples", "suture", "removal",
+      "new", "patient", "pt", "adult", "male", "female", "yo"
     ]);
+
+    const CANONICAL_FIRST_NAMES = {
+      bob: "robert", rob: "robert", robbie: "robert",obby: "robert",
+      bill: "william", billy: "william", will: "william", willy: "william", liam: "william",
+      mike: "michael", mickey: "michael", mick: "michael",
+      jim: "james", jimmy: "james", jamie: "james",
+      tom: "thomas", tommy: "thomas",
+      dick: "richard", rick: "richard", ricky: "richard", rich: "richard",
+      chuck: "charles", charlie: "charles",
+      dan: "daniel", danny: "daniel",
+      dave: "david", davy: "david",
+      chris: "christopher",
+      matt: "matthew",
+      joe: "joseph", joey: "joseph",
+      tony: "anthony",
+      steve: "steven", stephen: "steven",
+      jon: "john", jonathan: "john", johnny: "john",
+      pat: "patrick", patty: "patricia", trish: "patricia",
+      liz: "elizabeth", beth: "elizabeth", betty: "elizabeth", eliza: "elizabeth",
+      kathy: "katherine", kate: "katherine", katie: "katherine", catherine: "katherine", cathy: "katherine",
+      jen: "jennifer", jenny: "jennifer",
+      becky: "rebecca",
+      sam: "samuel", sammy: "samuel",
+      alex: "alexander",
+      ben: "benjamin", benny: "benjamin",
+      nick: "nicholas",
+      greg: "gregory",
+      tim: "timothy", timmy: "timothy",
+      don: "donald", donnie: "donald",
+      ron: "ronald", ronnie: "ronald",
+      ken: "kenneth", kenny: "kenneth",
+      jeff: "jeffrey", geoff: "jeffrey",
+      larry: "lawrence",
+      jerry: "gerald",
+      terry: "terrence",
+      randy: "randall",
+      brad: "bradley",
+      doug: "douglas",
+      ed: "edward", eddie: "edward", ted: "edward",
+      fred: "frederick", freddy: "frederick",
+      al: "albert",
+      andy: "andrew", drew: "andrew",
+      josh: "joshua",
+      zach: "zachary", zack: "zachary",
+      sue: "susan", suzie: "susan",
+      deb: "deborah", debbie: "deborah", debra: "deborah",
+      cindy: "cynthia",
+      pam: "pamela",
+      kim: "kimberly",
+      steph: "stephanie",
+      vicky: "victoria", vicki: "victoria",
+      meg: "margaret", maggie: "margaret", peggy: "margaret", marge: "margaret",
+      mandy: "amanda",
+      angie: "angela",
+      barb: "barbara",
+      val: "valerie"
+    };
+
+    function shortLevenshtein(a, b) {
+      if (a === b) return 0;
+      const la = a.length, lb = b.length;
+      if (Math.abs(la - lb) > 1) return 2;
+      const dp = Array.from({ length: la + 1 }, (_, i) => i);
+      for (let j = 1; j <= lb; j++) {
+        let prev = dp[0];
+        dp[0] = j;
+        for (let i = 1; i <= la; i++) {
+          const temp = dp[i];
+          dp[i] = a[i - 1] === b[j - 1] ? prev : 1 + Math.min(prev, dp[i], dp[i - 1]);
+          prev = temp;
+        }
+      }
+      return dp[la];
+    }
 
     function normalizeNameTokens(str) {
       return String(str || "")
         .toLowerCase()
         .replace(/\([^)]*\)/g, " ")
+        .replace(/\[[^\]]*\]/g, " ")
+        .replace(/\b\d+\s*(?:m|f|yo|y\/o|wk|wks|mo|yr)?\b/g, " ")
         .replace(/[^a-z\s]/g, " ")
         .split(/\s+/)
         .filter(t => t.length > 1 && !IGNORED_NAME_SUFFIXES_AND_RANKS.has(t));
     }
 
-    function extractStructuredPersonName(rawStr) {
+    function extractCandidatePersonNames(rawStr) {
       const cleaned = String(rawStr || "")
         .toLowerCase()
         .replace(/\([^)]*\)/g, " ")
+        .replace(/\[[^\]]*\]/g, " ")
         .trim();
-      if (!cleaned) return { last: "", first: "", tokens: [] };
+      if (!cleaned) return [];
 
       if (cleaned.includes(",")) {
         const [lastPart, restPart] = cleaned.split(",", 2);
@@ -1644,18 +1810,50 @@ NOTES:
         const restTokens = normalizeNameTokens(restPart);
         const last = lastTokens.join(" ") || (lastTokens[0] || "");
         const first = restTokens[0] || "";
-        return { last, first, lastTokens, tokens: [...lastTokens, ...restTokens] };
+        return [{ last, first, lastTokens, tokens: [...lastTokens, ...restTokens] }];
       }
 
       const tokens = normalizeNameTokens(cleaned);
-      if (tokens.length === 0) return { last: "", first: "", lastTokens: [], tokens: [] };
-      if (tokens.length === 1) return { last: tokens[0], first: "", lastTokens: [tokens[0]], tokens };
-      return {
-        last: tokens[tokens.length - 1],
-        first: tokens[0],
-        lastTokens: [tokens[tokens.length - 1]],
-        tokens
-      };
+      if (tokens.length === 0) return [];
+      if (tokens.length === 1) return [{ last: tokens[0], first: "", lastTokens: [tokens[0]], tokens }];
+      // Support both "First [Middle] Last" and military/schedule "LAST FIRST [MIDDLE]" without comma
+      return [
+        {
+          last: tokens[tokens.length - 1],
+          first: tokens[0],
+          lastTokens: [tokens[tokens.length - 1]],
+          tokens
+        },
+        {
+          last: tokens[0],
+          first: tokens[1],
+          lastTokens: [tokens[0]],
+          tokens
+        }
+      ];
+    }
+
+    function firstNamesEquivalent(fA, fB) {
+      if (!fA || !fB) return false;
+      if (fA === fB) return true;
+      const canA = CANONICAL_FIRST_NAMES[fA] || fA;
+      const canB = CANONICAL_FIRST_NAMES[fB] || fB;
+      if (canA === canB) return true;
+      if (fA.length >= 3 && fB.length >= 3 && (fA.startsWith(fB) || fB.startsWith(fA))) return true;
+      if (fA.length >= 4 && fB.length >= 4 && shortLevenshtein(fA, fB) <= 1) return true;
+      return false;
+    }
+
+    function lastNamesEquivalent(candA, candB) {
+      if (!candA.last || !candB.last) return false;
+      const lA = candA.last.replace(/\s+/g, "");
+      const lB = candB.last.replace(/\s+/g, "");
+      if (lA === lB) return true;
+      if (candA.lastTokens && candB.lastTokens && candA.lastTokens.some(lt => lt.length >= 3 && candB.lastTokens.includes(lt))) {
+        return true;
+      }
+      if (lA.length >= 5 && lB.length >= 5 && shortLevenshtein(lA, lB) <= 1) return true;
+      return false;
     }
 
     function namesMatchTokens(nameA, nameB) {
@@ -1663,27 +1861,48 @@ NOTES:
       const tokB = normalizeNameTokens(nameB);
       if (tokA.length === 0 || tokB.length === 0) return false;
       const [shorter, longer] = tokA.length <= tokB.length ? [tokA, tokB] : [tokB, tokA];
-      if (shorter.every(tok => longer.includes(tok))) return true;
+      if (shorter.length >= 2 && shorter.every(tok => longer.some(lt => lt === tok || firstNamesEquivalent(tok, lt)))) {
+        return true;
+      }
 
-      // Also match when both names have different middle names/initials or hyphenated last names ("Smith, John A" vs "Smith, John Michael")
-      const pA = extractStructuredPersonName(nameA);
-      const pB = extractStructuredPersonName(nameB);
-      if (pA.last && pB.last && pA.first && pB.first) {
-        const lastMatch = pA.last === pB.last
-          || (pA.lastTokens && pB.lastTokens && pA.lastTokens.some(lt => pB.lastTokens.includes(lt)));
-        const firstMatch = pA.first === pB.first
-          || (pA.first.length >= 3 && pB.first.length >= 3 && (pA.first.startsWith(pB.first.slice(0, 3)) || pB.first.startsWith(pA.first.slice(0, 3))));
-        if (lastMatch && firstMatch) return true;
+      const candsA = extractCandidatePersonNames(nameA);
+      const candsB = extractCandidatePersonNames(nameB);
+      for (const pA of candsA) {
+        for (const pB of candsB) {
+          if (pA.last && pB.last && pA.first && pB.first) {
+            if (lastNamesEquivalent(pA, pB) && firstNamesEquivalent(pA.first, pB.first)) {
+              return true;
+            }
+          }
+        }
       }
       return false;
     }
 
     function findCaseInLocalRegistry(nameQuery) {
       const cases = getSurgicalCases();
+      if (!nameQuery || cases.length === 0) return null;
       const matches = [];
       for (let i = cases.length - 1; i >= 0; i--) {
-        if (namesMatchTokens(nameQuery, cases[i].patientName)) {
-          matches.push(cases[i]);
+        const c = cases[i];
+        if (!c) continue;
+        const candName = c.patientName || c.name || c.patient || "";
+        if (namesMatchTokens(nameQuery, candName)) {
+          matches.push({ ...c, patientName: candName });
+        }
+      }
+      // Fallback: if schedule only provided a single surname token, match if there is a unique surname match in Case DB
+      if (matches.length === 0) {
+        const qTokens = normalizeNameTokens(nameQuery);
+        if (qTokens.length === 1 && qTokens[0].length >= 4) {
+          const surnameMatches = cases.filter(c => {
+            const candName = (c && (c.patientName || c.name || c.patient)) || "";
+            const cands = extractCandidatePersonNames(candName);
+            return cands.some(p => p.last === qTokens[0] || (p.lastTokens && p.lastTokens.includes(qTokens[0])));
+          });
+          if (surnameMatches.length === 1) {
+            matches.push({ ...surnameMatches[0], patientName: surnameMatches[0].patientName || surnameMatches[0].name });
+          }
         }
       }
       if (matches.length === 0) return null;
@@ -1749,11 +1968,11 @@ NOTES:
       if (/\b(?:dr\.?\s*craig\s+cameron|dr\.?\s*cameron|cameron'?s\s+patient|following\s+for\s+cameron)\b/i.test(s)) {
         return "Dr. Craig Cameron, MD (Retired April 2026 — ≥6M Post-Op Surveillance)";
       }
-      const explicitColleagueMatch = s.match(/\b(?:performed\s+by|surgery\s+by|following\s+(?:up\s+)?for|post[- ]?op\s+for|covering\s+for|colleague|surgeon\s+was|by)\s+(dr\.?\s+[a-z][a-z'-]+(?:\s+[a-z][a-z'-]+)?)/i)
+      const explicitColleagueMatch = s.match(/\b(?:performed\s+by|surgery\s+by|following\s+(?:up\s+)?for|post[- ]?op\s+for|covering\s+for|surgeon\s+was)\s+(dr\.?\s+[a-z][a-z'-]+(?:\s+[a-z][a-z'-]+)?)/i)
         || s.match(/\b(dr\.?\s+[a-z][a-z'-]+)'?s\s+(?:post[- ]?op|patient|follow[- ]?up|case)\b/i);
       if (explicitColleagueMatch) {
         const rawDoc = explicitColleagueMatch[1].trim();
-        if (!/\bschulte\b/i.test(rawDoc)) {
+        if (!/\bschulte|dictate|operating|colleague|coverage\b/i.test(rawDoc)) {
           const formattedDoc = rawDoc.replace(/^dr\.?\s*/i, "Dr. ").replace(/\b([a-z])/g, c => c.toUpperCase());
           return `${formattedDoc}, MD (Colleague Post-Op Coverage)`;
         }
@@ -1761,15 +1980,18 @@ NOTES:
       return "";
     }
 
-    // Determine whether an unmatched post-op fits Dr. Craig Cameron's retirement cohort (stopped operating April 2026 -> all follow-ups ~6+ months out) vs. acute coverage for another colleague
+    // Attribute post-op visits on Dr. Schulte's clinic schedule to Dr. Spencer Schulte, MD by default unless Dr. Cameron (DOS <= Apr 2026 or explicitly named) or another colleague is explicitly specified
     function classifyUnmatchedPostOpAttribution(enc, clinicDateStr) {
-      const combinedText = `${enc.planSummary || ""} ${enc.preVisitScreening || ""} ${enc.dictation || ""} ${(enc.formValues && enc.formValues.postopIndexSurgeon) || ""}`;
+      const rawSurgeonField = (enc.formValues && enc.formValues.postopIndexSurgeon) || "";
+      const cleanSurgeonField = /colleague post-op coverage \(dictate/i.test(rawSurgeonField) ? "" : rawSurgeonField;
+      const combinedText = `${enc.planSummary || ""} ${enc.preVisitScreening || ""} ${enc.dictation || ""} ${cleanSurgeonField}`;
       const spokenSurgeon = extractSpokenSurgeonFromDictation(combinedText);
       if (spokenSurgeon) {
         const isCameron = /cameron/i.test(spokenSurgeon);
         return {
           surgeon: spokenSurgeon,
           isCameron,
+          isSchulte: false,
           defaultInterval: isCameron ? "6-Month" : null,
           badgeText: isCameron
             ? "🤝 Post-Op Continuity: Following for Dr. Craig Cameron, MD (Retired Apr 2026 · ≥6M Out)"
@@ -1780,25 +2002,31 @@ NOTES:
       const dosStr = (enc.formValues && enc.formValues.postopIndexDos) || "";
       const dosTs = parseFlexibleDateToTimestamp(dosStr, 2026);
       const cameronRetirementCutoffTs = new Date(2026, 3, 30, 23, 59, 59).getTime(); // April 30, 2026
-      const hasAcuteShortTermCue = /\b(?:2[- ]?wk|2[- ]?week|10[- ]?day|14[- ]?day|6[- ]?wk|6[- ]?week|12[- ]?wk|12[- ]?week|staple|suture\s+removal|wound\s+check|incision\s+check)\b/i.test(combinedText);
-      const hasLongTermCue = /\b(?:6[- ]?mo|6[- ]?month|1[- ]?yr|1[- ]?year|annual|long[- ]?term)\b/i.test(combinedText);
 
-      // If DOS is known and after April 2026, or schedule explicitly says 2-wk/6-wk/12-wk/wound check, Dr. Cameron was already retired -> other colleague coverage (or dictate surgeon)
-      if ((dosTs > cameronRetirementCutoffTs) || (hasAcuteShortTermCue && !hasLongTermCue)) {
+      // Only attribute to Dr. Craig Cameron if DOS is explicitly on/before April 30, 2026
+      if (dosTs > 0 && dosTs <= cameronRetirementCutoffTs) {
         return {
-          surgeon: "Colleague Post-Op Coverage (Dictate Operating Surgeon)",
-          isCameron: false,
-          defaultInterval: null,
-          badgeText: "🤝 Post-Op (<6M / Post-Apr 2026 — Dictate Colleague Surgeon or Sync Case DB)"
+          surgeon: "Dr. Craig Cameron, MD (Retired April 2026 — ≥6M Post-Op Surveillance)",
+          isCameron: true,
+          isSchulte: false,
+          defaultInterval: /\b(?:1[- ]?yr|1[- ]?year|annual)\b/i.test(combinedText) ? "1-Year" : "6-Month",
+          badgeText: "🤝 Post-Op Continuity: Following for Dr. Craig Cameron, MD (Retired Apr 2026 · ~6+ Mo Out)"
         };
       }
 
-      // Otherwise (~6+ months out / DOS <= April 2026 / routine post-op surveillance not in personal Case DB) -> Dr. Craig Cameron (retired April 2026)
+      // Default for all post-op visits on Dr. Schulte's schedule: performed by Dr. Spencer Schulte, MD
+      let inferredInterval = "2-Week";
+      if (/\b(?:1[- ]?yr|1[- ]?year|annual|12[- ]?mo)\b/i.test(combinedText)) inferredInterval = "1-Year";
+      else if (/\b(?:6[- ]?mo|6[- ]?month)\b/i.test(combinedText)) inferredInterval = "6-Month";
+      else if (/\b(?:12[- ]?wk|12[- ]?week|3[- ]?mo|3[- ]?month)\b/i.test(combinedText)) inferredInterval = "12-Week";
+      else if (/\b(?:6[- ]?wk|6[- ]?week|4[- ]?wk|4[- ]?week)\b/i.test(combinedText)) inferredInterval = "6-Week";
+
       return {
-        surgeon: "Dr. Craig Cameron, MD (Retired April 2026 — ≥6M Post-Op Surveillance)",
-        isCameron: true,
-        defaultInterval: /\b(?:1[- ]?yr|1[- ]?year|annual)\b/i.test(combinedText) ? "1-Year" : "6-Month",
-        badgeText: "🤝 Post-Op Continuity: Following for Dr. Craig Cameron, MD (Retired Apr 2026 · ~6+ Mo Out)"
+        surgeon: "Dr. Spencer Schulte, MD (Personal Case Log)",
+        isCameron: false,
+        isSchulte: true,
+        defaultInterval: inferredInterval,
+        badgeText: `🦾 Dr. Spencer Schulte, MD Post-Op (${inferredInterval} Follow-Up)`
       };
     }
 
@@ -1830,8 +2058,18 @@ NOTES:
       const approach = registryMatch.approach || "Standard";
       const precautions = registryMatch.postOpInstructions || "Routine postoperative protocol.";
       const closureKey = inferClosureKeyFromCaseText(registryMatch.closure);
+      const schulteSurgeonStr = "Dr. Spencer Schulte, MD (Personal Case Log)";
 
-      if (!enc.matchedCaseData || enc.matchedCaseData.id !== registryMatch.id || enc.matchedCaseData.procedure !== registryMatch.procedure) {
+      if (enc.assumedCareColleague) {
+        delete enc.assumedCareColleague;
+        changed = true;
+      }
+      if (enc.assumedCareBadge) {
+        delete enc.assumedCareBadge;
+        changed = true;
+      }
+
+      if (!enc.matchedCaseData || enc.matchedCaseData.id !== registryMatch.id || enc.matchedCaseData.procedure !== registryMatch.procedure || enc.matchedCaseData.dos !== registryMatch.dos) {
         enc.matchedCaseData = registryMatch;
         changed = true;
       }
@@ -1858,29 +2096,31 @@ NOTES:
         changed = true;
       }
 
-      // Ensure formValues are populated with Index Procedure, DOS, and Post-Op Interval
+      // Ensure formValues are populated with Dr. Spencer Schulte, MD, Index Procedure, DOS, and Post-Op Interval
       if (!enc.formValues || typeof enc.formValues !== "object") {
         enc.formValues = {};
         changed = true;
       }
-      if (!enc.formValues.postopIndexProc || enc.formValues.postopIndexProc === "Left Total Knee Arthroplasty") {
-        if (enc.formValues.postopIndexProc !== fullProc) {
-          enc.formValues.postopIndexProc = fullProc;
-          changed = true;
-        }
+      if (enc.formValues.postopIndexSurgeon !== schulteSurgeonStr) {
+        enc.formValues.postopIndexSurgeon = schulteSurgeonStr;
+        changed = true;
       }
-      if (!enc.formValues.postopIndexDos && dos) {
+      if (enc.formValues.postopIndexProc !== fullProc) {
+        enc.formValues.postopIndexProc = fullProc;
+        changed = true;
+      }
+      if (dos && enc.formValues.postopIndexDos !== dos) {
         enc.formValues.postopIndexDos = dos;
         changed = true;
       }
-      if (!enc.formValues.postopInterval && postopTiming.intervalOption) {
+      if (postopTiming.intervalOption && enc.formValues.postopInterval !== postopTiming.intervalOption) {
         enc.formValues.postopInterval = postopTiming.intervalOption;
         changed = true;
       }
 
-      // Ensure planSummary reflects the Case DB procedure, DOS, interval, implants, and precautions if not already customized
+      // Ensure planSummary reflects the Case DB procedure, DOS, interval, implants, and precautions
       const richPlanSummary = `s/p ${fullProc} (${dos} · ${postopTiming.label}) | Implants: ${implants} | Plan: ${precautions}`;
-      if (!enc.planSummary || enc.planSummary === "Initial evaluation" || enc.planSummary === "Routine evaluation" || enc.planSummary.startsWith("s/p ")) {
+      if (!enc.planSummary || enc.planSummary === "Initial evaluation" || enc.planSummary === "Routine evaluation" || enc.planSummary.startsWith("s/p ") || /\b(?:post[- ]?op|2[- ]?wk|6[- ]?wk|12[- ]?wk|wound\s+check|follow[- ]?up|colleague)\b/i.test(enc.planSummary)) {
         if (enc.planSummary !== richPlanSummary) {
           enc.planSummary = richPlanSummary;
           changed = true;
@@ -1888,10 +2128,16 @@ NOTES:
       }
 
       // Ensure preVisitScreening has the pulled Case DB summary so it's visible and merged into the note
-      const caseContextHeader = `[Case DB Auto-Pulled]: s/p ${fullProc} on ${dos} (${postopTiming.label}) | Approach: ${approach} | Implants: ${implants}${registryMatch.complications && registryMatch.complications !== 'None' ? ` | Comp Alert: ${registryMatch.complications}` : ''} | Protocol: ${precautions}`;
-      const existingPre = String(enc.preVisitScreening || "").trim();
-      if (!existingPre.includes("[Case DB Auto-Pulled]:")) {
-        enc.preVisitScreening = existingPre ? `${caseContextHeader}\n${existingPre}` : caseContextHeader;
+      const caseContextHeader = `[Case DB Auto-Pulled]: s/p ${fullProc} on ${dos} (${postopTiming.label}) by Dr. Spencer Schulte, MD | Approach: ${approach} | Implants: ${implants}${registryMatch.complications && registryMatch.complications !== 'None' ? ` | Comp Alert: ${registryMatch.complications}` : ''} | Protocol: ${precautions}`;
+      const existingPre = String(enc.preVisitScreening || "").replace(/^\[Case DB Auto-Pulled\]:.*(?:\r?\n|$)/i, "").trim();
+      const updatedPre = existingPre ? `${caseContextHeader}\n${existingPre}` : caseContextHeader;
+      if (enc.preVisitScreening !== updatedPre) {
+        enc.preVisitScreening = updatedPre;
+        changed = true;
+      }
+
+      if (changed || (enc.assembledNote && /colleague|following for dr\. craig cameron/i.test(enc.assembledNote))) {
+        enc.assembledNote = "";
         changed = true;
       }
 
@@ -1911,13 +2157,29 @@ NOTES:
 
       encounters.forEach(enc => {
         if (!enc || !enc.name) return;
+
+        // Scrub any legacy "Colleague Post-Op Coverage (Dictate Operating Surgeon)" pollution from prior sessions
+        if (enc.assumedCareColleague && /colleague post-op coverage \(dictate/i.test(enc.assumedCareColleague)) {
+          delete enc.assumedCareColleague;
+          anyUpdated = true;
+        }
+        if (enc.assumedCareBadge && /dictate colleague surgeon/i.test(enc.assumedCareBadge)) {
+          delete enc.assumedCareBadge;
+          anyUpdated = true;
+        }
+        if (enc.formValues && enc.formValues.postopIndexSurgeon && /colleague post-op coverage \(dictate/i.test(enc.formValues.postopIndexSurgeon)) {
+          enc.formValues.postopIndexSurgeon = "Dr. Spencer Schulte, MD (Personal Case Log)";
+          enc.assembledNote = "";
+          anyUpdated = true;
+        }
+        if (enc.assembledNote && /colleague post-op coverage \(dictate/i.test(enc.assembledNote)) {
+          enc.assembledNote = "";
+          anyUpdated = true;
+        }
+
         const foundCase = findCaseInLocalRegistry(enc.name) || enc.matchedCaseData || null;
         if (foundCase) {
           matchedCount++;
-          if (enc.assumedCareColleague) {
-            delete enc.assumedCareColleague;
-            anyUpdated = true;
-          }
           const updated = enrichEncounterWithCaseMatch(enc, foundCase, targetDate);
           if (updated) anyUpdated = true;
           matched.push({ enc, caseMatch: foundCase });
@@ -1937,11 +2199,12 @@ NOTES:
             anyUpdated = true;
           }
           if (!enc.formValues || typeof enc.formValues !== "object") enc.formValues = {};
-          if (!enc.formValues.postopIndexSurgeon || enc.formValues.postopIndexSurgeon.includes("Dr. Craig Cameron") !== attr.isCameron) {
+          if (!enc.formValues.postopIndexSurgeon || enc.formValues.postopIndexSurgeon !== attr.surgeon) {
             enc.formValues.postopIndexSurgeon = attr.surgeon;
+            enc.assembledNote = "";
             anyUpdated = true;
           }
-          if (attr.defaultInterval && (!enc.formValues.postopInterval || enc.formValues.postopInterval === "2-Week")) {
+          if (attr.defaultInterval && !enc.formValues.postopInterval) {
             enc.formValues.postopInterval = attr.defaultInterval;
             anyUpdated = true;
           }
@@ -1951,10 +2214,10 @@ NOTES:
 
       if (anyUpdated) {
         safeSetLocalStorage(`orthoflow_encounters_${targetDate}`, JSON.stringify(encounters));
-        if (activeEncounterId) {
+        if (activeEncounterId && targetDate === currentClinicDate) {
           const activeEnc = encounters.find(e => e.id === activeEncounterId);
-          if (activeEnc && activeEnc.matchedCaseData) {
-            matchedCaseData = activeEnc.matchedCaseData;
+          if (activeEnc) {
+            matchedCaseData = activeEnc.matchedCaseData || null;
           }
         }
       }
@@ -1966,6 +2229,52 @@ NOTES:
         }
       }
       return { matched, matchedCount, unmatchedPostOps, anyUpdated };
+    }
+
+    function syncAllSavedClinicDatesWithCaseDB(refreshUI = false) {
+      const dateSet = new Set();
+      if (typeof currentClinicDate === "string" && currentClinicDate) dateSet.add(currentClinicDate);
+      dateSet.add("2026-11-17");
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i) || "";
+        if (k.startsWith("orthoflow_encounters_")) {
+          const dStr = k.replace("orthoflow_encounters_", "");
+          if (/^\d{4}-\d{2}-\d{2}$/.test(dStr)) {
+            dateSet.add(dStr);
+          }
+        }
+      }
+      let totalMatched = 0;
+      dateSet.forEach(dStr => {
+        const res = syncClinicEncountersWithCaseDB(dStr, false);
+        totalMatched += (res && res.matchedCount) ? res.matchedCount : 0;
+      });
+      if (refreshUI) {
+        renderClinicRosterUI();
+        if (activeEncounterId) {
+          loadEncounterIntoWorkspace(activeEncounterId, isEnlargedEncounterFocusOpen);
+        }
+      }
+      return totalMatched;
+    }
+
+    function manuallyLinkEncounterToCaseId(caseId) {
+      if (!caseId) return;
+      const cases = getSurgicalCases();
+      const found = cases.find(c => c && String(c.id) === String(caseId));
+      if (!found) return;
+      matchedCaseData = found;
+      if (activeEncounterId) {
+        const encounters = getClinicEncounters(currentClinicDate);
+        const enc = encounters.find(e => e.id === activeEncounterId);
+        if (enc) {
+          enrichEncounterWithCaseMatch(enc, found, currentClinicDate);
+          safeSetLocalStorage(`orthoflow_encounters_${currentClinicDate}`, JSON.stringify(encounters));
+          loadEncounterIntoWorkspace(activeEncounterId, isEnlargedEncounterFocusOpen);
+          return;
+        }
+      }
+      lookupPatient(true);
     }
 
     function inferCaseCoding(procName, laterality = "Operative", moduleType = "") {
@@ -2538,8 +2847,18 @@ NOTES:
       const priorVisits = history.priorClinicEncounters;
 
       if (!found && !wl && priorVisits.length === 0) {
+        const allCases = getSurgicalCases();
+        const manualLinkHtml = allCases.length > 0
+          ? `<div class="mt-2 pt-2 border-t border-slate-800 flex flex-wrap items-center gap-2">
+               <span class="text-[11px] font-semibold text-emerald-300">🔗 Link to Case DB Surgery:</span>
+               <select onchange="manuallyLinkEncounterToCaseId(this.value)" class="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-[11px] text-white">
+                 <option value="">-- Select Case from Your Surgery Log (${allCases.length}) --</option>
+                 ${allCases.map(c => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.patientName || c.name)} — ${escapeHtml(formatCaseProcedureWithLaterality(c))} (${escapeHtml(c.dos || 'N/A')})</option>`).join("")}
+               </select>
+             </div>`
+          : "";
         alertBox.className = "mt-3 p-3 rounded-xl border border-slate-800 bg-slate-950 text-slate-400 text-xs";
-        alertBox.innerText = "No prior surgical case, waitlist entry, or previous clinic visit found for this patient.";
+        alertBox.innerHTML = `<div>No automatic Case DB match found for <b>${escapeHtml(name)}</b> (Post-Op notes default to Dr. Spencer Schulte, MD).</div>${manualLinkHtml}`;
         alertBox.classList.remove("hidden");
         return;
       }
@@ -2562,13 +2881,17 @@ NOTES:
           renderTemplateFields();
         }
 
-        // Always ensure post-op fields are populated from Case DB if still on default/empty
+        // Always ensure post-op fields are populated from Case DB
+        const surgEl = document.getElementById("postopIndexSurgeon");
+        if (surgEl) {
+          surgEl.value = "Dr. Spencer Schulte, MD (Personal Case Log)";
+        }
         const procEl = document.getElementById("postopIndexProc");
-        if (procEl && (!procEl.value.trim() || procEl.value === "Left Total Knee Arthroplasty")) {
+        if (procEl) {
           procEl.value = fullProc;
         }
         const dosEl = document.getElementById("postopIndexDos");
-        if (dosEl && !dosEl.value.trim() && found.dos) {
+        if (dosEl && found.dos) {
           dosEl.value = found.dos;
         }
         const intEl = document.getElementById("postopInterval");
@@ -3571,9 +3894,6 @@ NOTES:
     }
 
     function setDynamicFormValues(formValues) {
-      lastRawDictationBeforeAiParse = "";
-      const restoreBtn = document.getElementById("restoreRawDictationBtn");
-      if (restoreBtn) restoreBtn.classList.add("hidden");
       resetVoiceMicButtonUI(false);
 
       resetAddonFieldsToDefault();
@@ -3656,9 +3976,6 @@ NOTES:
       document.getElementById("dictationBox").value = "";
       document.getElementById("matchAlert").classList.add("hidden");
       document.getElementById("activeEncounterTag").classList.remove("hidden");
-      lastRawDictationBeforeAiParse = "";
-      const restoreBtn = document.getElementById("restoreRawDictationBtn");
-      if (restoreBtn) restoreBtn.classList.add("hidden");
       resetVoiceMicButtonUI(false);
 
       resetAddonFieldsToDefault();
@@ -3979,10 +4296,12 @@ NOTES:
         const dos = (caseMatch && caseMatch.dos) || (enc.formValues && enc.formValues.postopIndexDos) || localCues.indexDos || "[DOS]";
         const timing = computePostOpIntervalFromDates(dos, currentClinicDate);
         const attr = !caseMatch ? classifyUnmatchedPostOpAttribution(enc, currentClinicDate) : null;
-        const interval = (enc.formValues && enc.formValues.postopInterval) || localCues.postopInterval || (attr && attr.defaultInterval) || timing.intervalOption || "Follow-Up";
+        const interval = (enc.formValues && enc.formValues.postopInterval) || localCues.postopInterval || (attr && attr.defaultInterval) || timing.intervalOption || "2-Week";
+        const rawSavedSurgeon = (enc.formValues && enc.formValues.postopIndexSurgeon) || "";
+        const cleanSavedSurgeon = /colleague post-op coverage \(dictate/i.test(rawSavedSurgeon) ? "" : rawSavedSurgeon;
         const indexSurgeonLine = caseMatch
           ? `Dr. Spencer Schulte, MD (Personal Surgical Case DB)`
-          : (localCues.indexSurgeon || (enc.formValues && enc.formValues.postopIndexSurgeon) || (attr && attr.surgeon) || "Dr. Craig Cameron, MD (Retired April 2026 — ≥6M Post-Op Surveillance)");
+          : (localCues.indexSurgeon || cleanSavedSurgeon || (attr && attr.surgeon) || "Dr. Spencer Schulte, MD (Personal Case Log)");
         const implants = (caseMatch && caseMatch.implants) || "Well-fixed prosthetic components per operative record / radiograph review";
         const approach = (caseMatch && caseMatch.approach) || "Standard";
         const closureStr = (caseMatch && caseMatch.closure) || "Standard layered closure";
@@ -4080,9 +4399,10 @@ ${enc.planSummary || 'Standard orthopedic management and follow-up protocol.'}`;
           ).join(" ");
 
           let bannerHtml = `<div class="flex flex-wrap items-center justify-between gap-1.5 mb-1">
-            <span class="font-bold text-emerald-300 text-[11px]">🔗 Post-Op Cross-Reference (${currentClinicDate}): ${matchedPostOps.length} Dr. Schulte Case DB${unmatchedPostOps.length > 0 ? ` · <span class="text-sky-300">${unmatchedPostOps.length} Following for Dr. Craig Cameron</span>` : ''}</span>
+            <span class="font-bold text-emerald-300 text-[11px]">🔗 Post-Op Cross-Reference (${currentClinicDate}): ${matchedPostOps.length} Matched in Case DB${unmatchedPostOps.length > 0 ? ` · <span class="text-sky-300">${unmatchedPostOps.length} Additional Post-Op(s)</span>` : ''}</span>
             <div class="flex flex-wrap items-center gap-1">
               ${dateJumpButtons}
+              <button type="button" onclick="syncAllSavedClinicDatesWithCaseDB(true)" class="px-2 py-0.5 rounded bg-emerald-700/40 hover:bg-emerald-700/60 border border-emerald-500/50 text-[10px] font-semibold text-emerald-200">🔄 Re-Sync All Dates</button>
               <button type="button" onclick="toggleCaseDbModal()" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 border border-slate-600 text-[10px] font-semibold text-slate-200">🗄️ Open Case DB</button>
             </div>
           </div>`;
@@ -4096,7 +4416,7 @@ ${enc.planSummary || 'Standard orthopedic management and follow-up protocol.'}`;
               return `<div onclick="loadEncounterIntoWorkspace('${escapeHtml(enc.id)}')" class="cursor-pointer px-2 py-1 rounded-lg bg-emerald-950/60 border border-emerald-600/40 hover:border-emerald-400 flex flex-wrap items-center justify-between gap-1 text-[10px]">
                 <div>
                   <span class="font-bold text-emerald-200">✓ ${escapeHtml(enc.name)}</span>
-                  <span class="text-slate-300 ml-1">— s/p <b>${escapeHtml(fullProc)}</b> (DOS: ${escapeHtml(mc.dos || 'N/A')} · ${escapeHtml(timing.label)})</span>
+                  <span class="text-slate-300 ml-1">— s/p <b>${escapeHtml(fullProc)}</b> by Dr. Spencer Schulte, MD (DOS: ${escapeHtml(mc.dos || 'N/A')} · ${escapeHtml(timing.label)})</span>
                   ${mc.implants ? `<span class="text-emerald-300/90 ml-1">| 🦾 ${escapeHtml(mc.implants)}</span>` : ''}
                   ${mc.closure ? `<span class="text-slate-400 ml-1">| 🩹 ${escapeHtml(mc.closure)}</span>` : ''}
                 </div>
@@ -4108,12 +4428,13 @@ ${enc.planSummary || 'Standard orthopedic management and follow-up protocol.'}`;
           if (unmatchedPostOps.length > 0) {
             bannerHtml += `<div class="mt-1.5 pt-1.5 border-t border-emerald-800/40 space-y-1">` + unmatchedPostOps.map(enc => {
               const attr = classifyUnmatchedPostOpAttribution(enc, currentClinicDate);
+              const tagLabel = attr.isSchulte ? "Dr. Schulte Post-Op →" : attr.isCameron ? "Dr. Cameron (≥6M) →" : "Colleague Post-Op →";
               return `<div onclick="loadEncounterIntoWorkspace('${escapeHtml(enc.id)}')" class="cursor-pointer px-2 py-1 rounded-lg bg-sky-950/50 border border-sky-500/40 hover:border-sky-400 flex flex-wrap items-center justify-between gap-1 text-[10px]">
                 <div>
-                  <span class="font-bold text-sky-200">🤝 ${escapeHtml(enc.name)}</span>
+                  <span class="font-bold text-sky-200">${attr.isSchulte ? '🦾' : '🤝'} ${escapeHtml(enc.name)}</span>
                   <span class="text-slate-300 ml-1">— ${escapeHtml(attr.badgeText)}</span>
                 </div>
-                <span class="text-[9px] text-sky-300 font-semibold">${attr.isCameron ? 'Dr. Cameron (≥6M) →' : 'Colleague Post-Op →'}</span>
+                <span class="text-[9px] text-sky-300 font-semibold">${tagLabel}</span>
               </div>`;
             }).join("") + `</div>`;
           }
@@ -4385,10 +4706,14 @@ Return ONLY valid JSON matching: { "clinicDate": "YYYY-MM-DD" | null, "patients"
 
             for (const pt of extractedPatients) {
               if (!pt.name) continue;
-              const alreadyExists = existingEncounters.some(e => e.name.toLowerCase() === pt.name.toLowerCase());
-              if (alreadyExists) continue;
-
               const registryMatch = findCaseInLocalRegistry(pt.name);
+              const existingEnc = existingEncounters.find(e => e && (e.name.toLowerCase() === pt.name.toLowerCase() || namesMatchTokens(e.name, pt.name)));
+              if (existingEnc) {
+                if (registryMatch) {
+                  enrichEncounterWithCaseMatch(existingEnc, registryMatch, targetDate);
+                }
+                continue;
+              }
 
               const isPostOp = registryMatch !== null || pt.predictedModule === "postop";
               const resolvedModule = isPostOp ? "postop" : (pt.predictedModule || "new_hip");
@@ -4418,6 +4743,7 @@ Return ONLY valid JSON matching: { "clinicDate": "YYYY-MM-DD" | null, "patients"
             }
 
             localStorage.setItem(`orthoflow_encounters_${targetDate}`, JSON.stringify(existingEncounters));
+            syncClinicEncountersWithCaseDB(targetDate, false);
           }
         }
 
@@ -5095,13 +5421,10 @@ Extract and return ONLY valid JSON matching:
         console.warn("Stage 1 Interactions API error, falling back to gemini-2.5-flash multimodal audio:", stage1Err.message || stage1Err);
       }
 
-      // Automatic Fallback: gemini-2.5-flash multimodal audio input with 25-second AbortController timeout
-      const fallbackController = new AbortController();
-      const fallbackTimeout = setTimeout(() => fallbackController.abort(), 25000);
-      try {
-        const fallbackUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
-        const fallbackPrompt = `Transcribe this orthopaedic clinical/surgical dictation audio accurately in English (en-US) using smart clinical formatting (remove disfluencies/stutters, resolve spoken self-corrections, and output ONLY the clean transcript text without commentary). Bias recognition toward this custom orthopaedic vocabulary:\n${customVocab.join(", ")}`;
-        const fallbackBody = {
+      // Automatic Fallback: Resilient multi-model Gemini multimodal audio transcription (gemini-3.8-flash / gemini-3.0-flash / auto-discovered Flash model) with 25-second timeout
+      const fallbackPrompt = `Transcribe this orthopaedic clinical/surgical dictation audio accurately in English (en-US) using smart clinical formatting (remove disfluencies/stutters, resolve spoken self-corrections, and output ONLY the clean transcript text without commentary). Bias recognition toward this custom orthopaedic vocabulary:\n${customVocab.join(", ")}`;
+      return await executeGeminiGenerateContentWithFallback(apiKey, (model, allowExtraConfig) => {
+        const bodyObj = {
           contents: [
             {
               parts: [
@@ -5109,37 +5432,16 @@ Extract and return ONLY valid JSON matching:
                 { inlineData: { mimeType: actualMime, data: base64Audio } }
               ]
             }
-          ],
-          generationConfig: {
-            thinkingConfig: { thinkingBudget: 0 }
-          }
+          ]
         };
-
-        const fbRes = await fetch(fallbackUrl, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-goog-api-key": apiKey
-          },
-          body: JSON.stringify(fallbackBody),
-          signal: fallbackController.signal
-        });
-        clearTimeout(fallbackTimeout);
-
-        const fbData = await fbRes.json().catch(() => ({}));
-        const fbText = fbData && fbData.candidates && fbData.candidates[0] && fbData.candidates[0].content && fbData.candidates[0].content.parts && fbData.candidates[0].content.parts[0]
-          ? fbData.candidates[0].content.parts[0].text
-          : "";
-        if (!fbRes.ok || fbData.error || !String(fbText).trim()) {
-          throw new Error(fbData.error ? fbData.error.message : `Stage 1 transcription failed (HTTP ${fbRes.status})`);
+        if (allowExtraConfig && model.startsWith("gemini-2.5")) {
+          bodyObj.generationConfig = { thinkingConfig: { thinkingBudget: 0 } };
         }
-        return String(fbText).trim();
-      } finally {
-        clearTimeout(fallbackTimeout);
-      }
+        return bodyObj;
+      }, 25000);
     }
 
-    // STAGE 2: Section-by-Section Structuring via gemini-2.5-flash:generateContent + systemInstruction + Strict OpenAPI responseSchema
+    // STAGE 2: Section-by-Section Structuring via Gemini Flash + systemInstruction + Strict OpenAPI responseSchema
     async function structureTranscriptStage2(cleanTranscript, moduleType, matchedCase = matchedCaseData) {
       const apiKey = getGeminiApiKey().trim();
       if (!apiKey) {
@@ -5170,13 +5472,15 @@ Physician Transcript:
 ${cleanTranscript}
 """`;
 
-      const controller = new AbortController();
-      currentAiAbortController = controller;
-      const timeoutId = setTimeout(() => controller.abort(), 25000);
-
-      try {
-        const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
-        const bodyObj = {
+      const candidateText = await executeGeminiGenerateContentWithFallback(apiKey, (model, allowExtraConfig) => {
+        const generationConfig = {
+          responseMimeType: "application/json",
+          responseSchema: getStage2ResponseSchema()
+        };
+        if (allowExtraConfig && model.startsWith("gemini-2.5")) {
+          generationConfig.thinkingConfig = { thinkingBudget: 0 };
+        }
+        return {
           systemInstruction: {
             parts: [{ text: systemInstructionText }]
           },
@@ -5186,41 +5490,15 @@ ${cleanTranscript}
               parts: [{ text: userPromptText }]
             }
           ],
-          generationConfig: {
-            responseMimeType: "application/json",
-            responseSchema: getStage2ResponseSchema(),
-            thinkingConfig: { thinkingBudget: 0 }
-          }
+          generationConfig
         };
+      }, 25000);
 
-        const res = await fetch(url, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-goog-api-key": apiKey
-          },
-          body: JSON.stringify(bodyObj),
-          signal: controller.signal
-        });
-        clearTimeout(timeoutId);
-
-        const data = await res.json().catch(() => ({}));
-        const candidateText = data && data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0]
-          ? data.candidates[0].content.parts[0].text
-          : null;
-
-        if (!res.ok || data.error || !candidateText) {
-          throw new Error(data.error ? data.error.message : `Stage 2 structuring failed (HTTP ${res.status})`);
-        }
-
-        const parsed = safeParseJson(candidateText, null);
-        if (!parsed || typeof parsed !== "object") {
-          throw new Error("Stage 2 returned invalid JSON.");
-        }
-        return parsed;
-      } finally {
-        clearTimeout(timeoutId);
+      const parsed = safeParseJson(candidateText, null);
+      if (!parsed || typeof parsed !== "object") {
+        throw new Error("Stage 2 returned invalid JSON.");
       }
+      return parsed;
     }
 
     function getOfflineAiQueue() {
@@ -6137,16 +6415,8 @@ ${cleanTranscript}
       initKeypad();
       loadAutoParsePreference();
 
-      // Automatically cross-reference & enrich all saved clinic dates (including 2026-11-17) against the Surgical Case DB
-      for (let i = 0; i < localStorage.length; i++) {
-        const k = localStorage.key(i) || "";
-        if (k.startsWith("orthoflow_encounters_")) {
-          const dStr = k.replace("orthoflow_encounters_", "");
-          if (/^\d{4}-\d{2}-\d{2}$/.test(dStr)) {
-            syncClinicEncountersWithCaseDB(dStr, false);
-          }
-        }
-      }
+      // Automatically cross-reference & enrich all saved clinic dates (including 2026-11-17 and all future dates) against the Surgical Case DB
+      syncAllSavedClinicDatesWithCaseDB(false);
 
       // Default to today if encounters exist today; otherwise automatically open the next upcoming date that has scheduled activity
       currentClinicDate = resolveDefaultActiveClinicDate();
@@ -6341,10 +6611,10 @@ ${cleanTranscript}
       } else if (type === "postop") {
         const defaultProc = (matchedCaseData ? formatCaseProcedureWithLaterality(matchedCaseData) : "") || "Left Total Knee Arthroplasty";
         const defaultDos = (matchedCaseData && matchedCaseData.dos) ? matchedCaseData.dos : "";
-        const defaultSurgeon = matchedCaseData
-          ? "Dr. Spencer Schulte, MD (Personal Case Log)"
-          : "Dr. Craig Cameron, MD (Retired April 2026 — ≥6M Post-Op Surveillance)";
-        const defaultInterval = matchedCaseData ? "2-Week" : "6-Month";
+        const defaultSurgeon = "Dr. Spencer Schulte, MD (Personal Case Log)";
+        const defaultInterval = (matchedCaseData && matchedCaseData.dos)
+          ? (computePostOpIntervalFromDates(matchedCaseData.dos, currentClinicDate).intervalOption || "2-Week")
+          : "2-Week";
         html = `
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <div>
@@ -7592,30 +7862,34 @@ MEDICAL DECISION MAKING (MDM), ASSESSMENT & PLAN:
         const peLine = `\nPHYSICAL EXAMINATION:\n${structPe || "Well-healed surgical incision without sinus tract or active drainage; range of motion, coronal/sagittal stability, and distal neurovascular status evaluated."}\n`;
         note = `EVALUATION OF THE PAINFUL / FAILED TOTAL JOINT ARTHROPLASTY\nPATIENT: ${ptName} | DEMOGRAPHICS: ${ageGender}\nDATE: ${new Date().toLocaleDateString()}\nATTENDING SURGEON: Dr. Spencer Schulte, MD (Adult Reconstruction)\n\nSUBJECTIVE & INDEX HISTORY:\nEvaluation of painful ${joint}. Course: ${pfi}.\n${clinicalNarrative ? `Clinical History: ${clinicalNarrative}\n` : ""}Instability, startup discomfort, and functional decline evaluated. No acute bacteremia or wound breakdown reported.\n${peLine}\nRADIOGRAPHIC & IMAGING ASSESSMENT:\n${preloadedXray || 'Orthogonal weight-bearing radiographs evaluated for implant fixation, osteolysis, and coronal/sagittal alignment.'}${preloadedOrders ? `\nDay-Of Workup / Orders: ${preloadedOrders}` : ''}\n\nPERIPROSTHETIC JOINT INFECTION (PJI) EXCLUSION WORKUP:\n- Serum Biomarkers: ${labs}\n- Synovial Fluid Aspiration: ${asp}\n- Interpretation: Evaluated per ICM / MSIS diagnostic criteria.\n\nPLAN:\n1. Rule out indolent PJI pending complete synovial cultures.\n2. Surgical reconstruction pathway (isolated liner exchange vs revision arthroplasty) tailored to culture and mechanical findings.\n3. Specific Plan: ${structPlan || instructions}`;
       } else if (type === "postop") {
+        if (!matchedCaseData && ptName && ptName !== "[Patient Name]") {
+          matchedCaseData = findCaseInLocalRegistry(ptName);
+        }
         const procInputVal = document.getElementById("postopIndexProc") ? document.getElementById("postopIndexProc").value.trim() : "";
         const dosInputVal = document.getElementById("postopIndexDos") ? document.getElementById("postopIndexDos").value.trim() : "";
-        const surgeonSelectVal = (localCues.indexSurgeon || (document.getElementById("postopIndexSurgeon") ? document.getElementById("postopIndexSurgeon").value.trim() : "")).trim();
+        const rawSurgeonVal = (localCues.indexSurgeon || (document.getElementById("postopIndexSurgeon") ? document.getElementById("postopIndexSurgeon").value.trim() : "")).trim();
+        const surgeonSelectVal = /colleague post-op coverage \(dictate/i.test(rawSurgeonVal) ? "" : rawSurgeonVal;
         const isCameronSpeech = /\b(?:dr\.?\s*craig\s+cameron|dr\.?\s*cameron|cameron'?s\s+patient)\b/i.test(combinedRawDictation);
-        const isExplicitOtherColleague = Boolean(localCues.indexSurgeon && !/cameron|schulte/i.test(localCues.indexSurgeon));
-        const isCameronFollowUp = !isExplicitOtherColleague && (isCameronSpeech || (!matchedCaseData && /cameron/i.test(surgeonSelectVal)) || (!matchedCaseData && !surgeonSelectVal));
-        const proc = localCues.indexProcedure || procInputVal || (matchedCaseData ? formatCaseProcedureWithLaterality(matchedCaseData) : "") || "Joint Arthroplasty";
-        const dos = localCues.indexDos || dosInputVal || (matchedCaseData && matchedCaseData.dos) || "[DOS]";
+        const isCameronFollowUp = !matchedCaseData && (isCameronSpeech || /cameron/i.test(surgeonSelectVal));
+        const isSchulteSurgeon = Boolean(matchedCaseData) || (!isCameronFollowUp && (!surgeonSelectVal || /schulte|personal case/i.test(surgeonSelectVal)));
+        const proc = (matchedCaseData ? formatCaseProcedureWithLaterality(matchedCaseData) : "") || localCues.indexProcedure || procInputVal || "Joint Arthroplasty";
+        const dos = (matchedCaseData && matchedCaseData.dos) || localCues.indexDos || dosInputVal || "[DOS]";
         const implants = (matchedCaseData && matchedCaseData.implants) ? matchedCaseData.implants : "Well-fixed prosthetic components per operative record / radiograph review";
         const approach = (matchedCaseData && matchedCaseData.approach) ? matchedCaseData.approach : "";
         const caseComplications = (matchedCaseData && matchedCaseData.complications && !/^none\b/i.test(matchedCaseData.complications)) ? matchedCaseData.complications : "";
         const postopTiming = computePostOpIntervalFromDates(dos, currentClinicDate);
-        const defaultInterval = postopTiming.intervalSelect || (isCameronFollowUp ? "6-Month" : "Follow-Up");
+        const defaultInterval = postopTiming.intervalOption || (isCameronFollowUp ? "6-Month" : "2-Week");
         const interval = localCues.postopInterval || (document.getElementById("postopInterval") ? document.getElementById("postopInterval").value : defaultInterval);
         const incEx = localCues.incisionExam || (document.getElementById("postopIncision") ? document.getElementById("postopIncision").value : "Clean, dry, intact; no erythema or drainage");
         const romInputVal = document.getElementById("postopRomExam") ? document.getElementById("postopRomExam").value.trim() : "";
         const romExamLine = structPe || (localCues.kneeROM ? `Range of motion ${localCues.kneeROM}; progressing satisfactorily without guarded motion block.` : (romInputVal || "Progressing satisfactorily without guarded motion block."));
-        const effectiveColleagueSurgeon = localCues.indexSurgeon || surgeonSelectVal || "Colleague Orthopedic Surgeon";
-        const surgeonHistorySentence = matchedCaseData
-          ? `Patient presents for scheduled ${interval} (${postopTiming.label}) evaluation s/p ${proc}${dos && dos !== '[DOS]' ? ` performed on ${dos} by Dr. Spencer Schulte, MD` : ''}.`
+        const effectiveColleagueSurgeon = localCues.indexSurgeon || surgeonSelectVal || "Dr. Spencer Schulte, MD";
+        const surgeonHistorySentence = isSchulteSurgeon
+          ? `Patient presents for scheduled ${interval}${postopTiming.daysPostOp !== null ? ` (${postopTiming.label})` : ''} evaluation s/p ${proc}${dos && dos !== '[DOS]' ? ` performed on ${dos}` : ''} by Dr. Spencer Schulte, MD.`
           : isCameronFollowUp
           ? `Patient presents for scheduled ${interval}${dos && dos !== '[DOS]' ? ` (${postopTiming.label})` : ' (~6+ months post-op)'} evaluation s/p ${proc}${dos && dos !== '[DOS]' ? ` performed on ${dos}` : ' (prior to May 2026)'} by Dr. Craig Cameron, MD (assuming ongoing postoperative orthopedic surveillance following Dr. Cameron's April 2026 retirement).`
           : `Patient presents for scheduled ${interval}${dos && dos !== '[DOS]' ? ` (${postopTiming.label})` : ''} evaluation s/p ${proc}${dos && dos !== '[DOS]' ? ` performed on ${dos}` : ''} by ${effectiveColleagueSurgeon}.`;
-        const assessmentSurgeonTag = matchedCaseData
+        const assessmentSurgeonTag = isSchulteSurgeon
           ? ""
           : isCameronFollowUp
           ? " (following for Dr. Craig Cameron, MD — retired April 2026)"
