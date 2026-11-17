@@ -508,6 +508,7 @@
                 <option value="asp_pji">Diagnostic Joint Aspiration — PJI / Synovial Workup (CPT 20610)</option>
               </select>
               <input id="clinicProcDetails" oninput="autoSaveCurrentEncounter(); assembleNote();" type="text" placeholder="Injectate / synovial aspirate details (auto-fills on selection)" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-2 text-xs text-white focus:outline-none focus:border-emerald-500">
+              <input id="clinicProcJoint" oninput="autoSaveCurrentEncounter(); assembleNote();" type="text" placeholder="Target joint & laterality (e.g. Right Knee) — auto-fills from dictation" class="sm:col-span-2 w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-2 text-xs text-white focus:outline-none focus:border-emerald-500">
             </div>
           </div>
 
@@ -1092,8 +1093,66 @@ NOTES:
         physical_exam: "",
         radiographic_findings: "",
         assessment_and_plan: "",
-        operative_details: ""
+        operative_details: "",
+        visitDisposition: "",
+        surgicalSignup: false,
+        indexProcedure: "",
+        indexSurgeryDate: ""
       };
+    }
+
+    // --- Visit Disposition (Nonoperative vs Surgical Candidate vs Undecided) ---
+    const NONOP_PLAN_REGEX = /\b(?:physical\s+therapy|\bpt\b|home\s+exercise|hep\b|nsaids?|meloxicam|naproxen|ibuprofen|diclofenac|voltaren|celebrex|tylenol|acetaminophen|brac(?:e|ing)|unloader|weight\s+loss|lose\s+weight|activity\s+modification|injection|injected|cortisone|steroid|kenalog|viscosupplement|hyaluronic|gel\s+shot|defer(?:ring)?\s+surgery|not\s+(?:ready|interested)\s+(?:for|in)\s+surgery|hold\s+off\s+on\s+surgery|nonoperative|non-operative|conservative)\b/i;
+    const SURGICAL_PLAN_REGEX = /\b(?:sign(?:ed|ing)?\s+(?:him|her|them|patient)?\s*up\s+for|schedul(?:e|ed|ing)\s+(?:for\s+)?(?:surgery|a\s+(?:right|left)|right|left|tka|tha|uka|total)|consent(?:ed)?\s+for|proceed\s+with\s+(?:elective\s+)?(?:right|left|bilateral)?\s*(?:direct\s+anterior\s+)?(?:tka|tha|uka|total|partial|arthroplasty)|wants\s+to\s+proceed\s+with\s+surgery|add(?:ed)?\s+to\s+(?:the\s+)?(?:surgery\s+)?waitlist)\b/i;
+
+    function resolveVisitDisposition(planText) {
+      const s = activeStructuredSections || {};
+      if (s.surgicalSignup === true || s.visitDisposition === "surgical_candidate") return "surgical_candidate";
+      if (s.visitDisposition === "nonoperative") return "nonoperative";
+      const plan = String(planText || "");
+      if (plan && SURGICAL_PLAN_REGEX.test(plan)) return "surgical_candidate";
+      if (plan && NONOP_PLAN_REGEX.test(plan)) return "nonoperative";
+      return "undecided";
+    }
+
+    // --- Procedure Joint/Laterality Compatibility (prevents stale THA <-> TKA Case DB swaps) ---
+    function procedureJointKey(str) {
+      const s = String(str || "").toLowerCase();
+      if (!s.trim()) return "";
+      if (/\b(?:tha|hip|acetabul|femoral\s+neck|hemiarthroplasty|bipolar|intertroch)\b/.test(s)) return "hip";
+      if (/\b(?:tka|uka|knee|patell|tibial\s+plateau|oxford|unicompartmental|partial\s+knee)\b/.test(s)) return "knee";
+      if (/\b(?:shoulder|tsa|rtsa|glenoid|humer)\b/.test(s)) return "shoulder";
+      if (/\b(?:ankle|tibiotalar)\b/.test(s)) return "ankle";
+      if (/\bclavic/.test(s)) return "clavicle";
+      if (/\bfemur|femoral\s+shaft|supracondylar\b/.test(s)) return "femur";
+      return "";
+    }
+
+    function procedureSideKey(str) {
+      const s = String(str || "").toLowerCase();
+      if (/\bbilateral\b/.test(s)) return "bilateral";
+      if (/\bright\b|\brt\b|\(r\)/.test(s)) return "right";
+      if (/\bleft\b|\blt\b|\(l\)/.test(s)) return "left";
+      return "";
+    }
+
+    function proceduresCompatible(procA, procB) {
+      const jA = procedureJointKey(procA), jB = procedureJointKey(procB);
+      if (jA && jB && jA !== jB) return false;
+      const sA = procedureSideKey(procA), sB = procedureSideKey(procB);
+      if (sA && sB && sA !== sB && sA !== "bilateral" && sB !== "bilateral") return false;
+      return true;
+    }
+
+    // Returns the Case DB record (primary or one of its additionalCases) matching the dictated procedure, or null if none matches
+    function selectCaseMatchingProcedure(caseMatch, dictatedProc) {
+      if (!caseMatch) return null;
+      if (!dictatedProc || !String(dictatedProc).trim()) return caseMatch;
+      const candidates = [caseMatch, ...(Array.isArray(caseMatch.additionalCases) ? caseMatch.additionalCases : [])];
+      const hit = candidates.find(c => proceduresCompatible(formatCaseProcedureWithLaterality(c), dictatedProc));
+      if (!hit) return null;
+      if (hit === caseMatch) return caseMatch;
+      return { ...hit, additionalCases: candidates.filter(c => c !== hit) };
     }
 
     // --- Inactivity Auto-Lock (15m Foreground / 5m Backgrounded) ---
@@ -2177,7 +2236,14 @@ NOTES:
           anyUpdated = true;
         }
 
-        const foundCase = findCaseInLocalRegistry(enc.name) || enc.matchedCaseData || null;
+        const encDictatedIndexProc = (enc.structuredSections && enc.structuredSections.indexProcedure) || "";
+        const foundCase = selectCaseMatchingProcedure(findCaseInLocalRegistry(enc.name) || enc.matchedCaseData || null, encDictatedIndexProc);
+        if (!foundCase && enc.matchedCaseData) {
+          // Stale Case DB record conflicts with the dictated index procedure (e.g. Case DB TKA vs dictated THA) — drop it
+          enc.matchedCaseData = null;
+          enc.assembledNote = "";
+          anyUpdated = true;
+        }
         if (foundCase) {
           matchedCount++;
           const updated = enrichEncounterWithCaseMatch(enc, foundCase, targetDate);
@@ -2837,14 +2903,21 @@ NOTES:
       const name = document.getElementById("ptName").value.trim();
       const alertBox = document.getElementById("matchAlert");
       if (!name) {
+        matchedCaseData = null;
         if (alertBox) alertBox.classList.add("hidden");
         return;
       }
 
       const history = findLongitudinalPatientHistory(name);
-      const found = history.surgicalCase;
+      const dictatedIndexProc = (activeStructuredSections && activeStructuredSections.indexProcedure) || "";
+      const found = selectCaseMatchingProcedure(history.surgicalCase, dictatedIndexProc);
       const wl = history.waitlistItem;
       const priorVisits = history.priorClinicEncounters;
+
+      // Clear any stale Case DB record from a previously selected patient whenever this patient has no (compatible) Case DB match
+      if (!found) {
+        matchedCaseData = null;
+      }
 
       if (!found && !wl && priorVisits.length === 0) {
         const allCases = getSurgicalCases();
@@ -2887,11 +2960,12 @@ NOTES:
           surgEl.value = "Dr. Spencer Schulte, MD (Personal Case Log)";
         }
         const procEl = document.getElementById("postopIndexProc");
-        if (procEl) {
+        const procFieldCompatible = !procEl || !procEl.value.trim() || proceduresCompatible(procEl.value, fullProc);
+        if (procEl && procFieldCompatible) {
           procEl.value = fullProc;
         }
         const dosEl = document.getElementById("postopIndexDos");
-        if (dosEl && found.dos) {
+        if (dosEl && found.dos && procFieldCompatible) {
           dosEl.value = found.dos;
         }
         const intEl = document.getElementById("postopInterval");
@@ -3849,21 +3923,22 @@ NOTES:
       renderClinicRosterUI();
     }
 
-    const ADDON_FIELD_IDS = ["clinicProcType", "clinicProcDetails", "optBmi", "optA1c", "optNicotine", "optAnticoag", "optGlp1"];
+    const ADDON_FIELD_IDS = ["clinicProcType", "clinicProcDetails", "clinicProcJoint", "optBmi", "optA1c", "optNicotine", "optAnticoag", "optGlp1"];
     let currentRosterExportMode = "oneliners"; // "oneliners" | "remaining"
+    const DEFAULT_CORTICOSTEROID_COCKTAIL = "40mg Triamcinolone acetonide (Kenalog) + 4mL 1% Lidocaine + 4mL 0.25% Bupivacaine (Marcaine)";
+    const CLINIC_PROC_DEFAULT_DETAILS = {
+      none: "",
+      inj_20610: `${DEFAULT_CORTICOSTEROID_COCKTAIL} injected intra-articularly via landmark approach`,
+      inj_20611: `${DEFAULT_CORTICOSTEROID_COCKTAIL} injected under direct ultrasound/fluoroscopic guidance with image documentation`,
+      visco_20610: "High-molecular-weight hyaluronic acid viscosupplementation injected intra-articularly under strict aseptic technique",
+      asp_pji: "15mL synovial fluid aspirated under strict sterile technique; sent for synovial WBC count, PMN %, aerobic/anaerobic/fungal/AFB cultures, and alpha-defensin"
+    };
 
     function onClinicProcChanged() {
       const sel = document.getElementById("clinicProcType");
       const det = document.getElementById("clinicProcDetails");
       if (!sel || !det) return;
-      const defaults = {
-        none: "",
-        inj_20610: "40mg Triamcinolone acetonide (Kenalog) + 4mL 1% Lidocaine + 4mL 0.25% Bupivacaine (Marcaine) injected intra-articularly via landmark approach",
-        inj_20611: "40mg Triamcinolone acetonide (Kenalog) + 4mL 1% Lidocaine + 4mL 0.25% Bupivacaine (Marcaine) injected under direct ultrasound/fluoroscopic guidance with image documentation",
-        visco_20610: "High-molecular-weight hyaluronic acid viscosupplementation injected intra-articularly under strict aseptic technique",
-        asp_pji: "15mL synovial fluid aspirated under strict sterile technique; sent for synovial WBC count, PMN %, aerobic/anaerobic/fungal/AFB cultures, and alpha-defensin"
-      };
-      det.value = defaults[sel.value] || "";
+      det.value = CLINIC_PROC_DEFAULT_DETAILS[sel.value] || "";
       autoSaveCurrentEncounter();
       assembleNote();
     }
@@ -3871,6 +3946,7 @@ NOTES:
     function resetAddonFieldsToDefault() {
       if (document.getElementById("clinicProcType")) document.getElementById("clinicProcType").value = "none";
       if (document.getElementById("clinicProcDetails")) document.getElementById("clinicProcDetails").value = "";
+      if (document.getElementById("clinicProcJoint")) document.getElementById("clinicProcJoint").value = "";
       if (document.getElementById("optBmi")) document.getElementById("optBmi").selectedIndex = 0;
       if (document.getElementById("optA1c")) document.getElementById("optA1c").selectedIndex = 0;
       if (document.getElementById("optNicotine")) document.getElementById("optNicotine").selectedIndex = 0;
@@ -4180,8 +4256,9 @@ NOTES:
       const enc = encounters.find(e => e.id === encounterId);
       if (!enc) return;
 
-      // Cross-reference Case DB live and enrich encounter with any newly matched surgical details
-      const liveMatch = findCaseInLocalRegistry(enc.name) || enc.matchedCaseData || null;
+      // Cross-reference Case DB live and enrich encounter with any newly matched surgical details (skipping Case DB records whose joint conflicts with the dictated index procedure)
+      const encDictatedProc = (enc.structuredSections && enc.structuredSections.indexProcedure) || "";
+      const liveMatch = selectCaseMatchingProcedure(findCaseInLocalRegistry(enc.name) || enc.matchedCaseData || null, encDictatedProc);
       if (liveMatch) {
         const wasEnriched = enrichEncounterWithCaseMatch(enc, liveMatch, currentClinicDate);
         if (wasEnriched) {
@@ -4194,21 +4271,14 @@ NOTES:
       matchedCaseData = liveMatch;
       currentTemplateSelectionSource = enc.templateSelectionSource || "schedule";
       isTemplateLockedByUser = Boolean(enc.templateLockedByUser);
-      activeStructuredSections = (enc.structuredSections && typeof enc.structuredSections === "object")
-        ? {
-            subjective_hpi: enc.structuredSections.subjective_hpi || "",
-            physical_exam: enc.structuredSections.physical_exam || "",
-            radiographic_findings: enc.structuredSections.radiographic_findings || "",
-            assessment_and_plan: enc.structuredSections.assessment_and_plan || "",
-            operative_details: enc.structuredSections.operative_details || ""
+      resetActiveStructuredSections();
+      if (enc.structuredSections && typeof enc.structuredSections === "object") {
+        Object.keys(activeStructuredSections).forEach(k => {
+          if (enc.structuredSections[k] !== undefined && enc.structuredSections[k] !== null) {
+            activeStructuredSections[k] = enc.structuredSections[k];
           }
-        : {
-            subjective_hpi: "",
-            physical_exam: "",
-            radiographic_findings: "",
-            assessment_and_plan: "",
-            operative_details: ""
-          };
+        });
+      }
       setManualNoteEditLock(false);
 
       document.getElementById("ptName").value = enc.name;
@@ -4938,6 +5008,22 @@ Extract and return ONLY valid JSON matching:
       if (opIn !== undefined && opIn !== null && String(opIn).trim() !== "") {
         activeStructuredSections.operative_details = String(opIn).trim();
       }
+      if (parsed.visitDisposition && ["nonoperative", "surgical_candidate", "undecided"].includes(parsed.visitDisposition)) {
+        activeStructuredSections.visitDisposition = parsed.visitDisposition;
+      }
+      if (parsed.waitlist_signup && parsed.waitlist_signup.signedUpForSurgery === true) {
+        activeStructuredSections.surgicalSignup = true;
+        activeStructuredSections.visitDisposition = "surgical_candidate";
+      }
+      const aiIndexProc = (parsed.indexProcedure && String(parsed.indexProcedure).trim()) || "";
+      const aiIndexDos = (parsed.indexSurgeryDate && String(parsed.indexSurgeryDate).trim()) || "";
+      if (aiIndexProc) activeStructuredSections.indexProcedure = aiIndexProc;
+      if (aiIndexDos) activeStructuredSections.indexSurgeryDate = aiIndexDos;
+
+      // Drop a stale Case DB match whose joint/laterality conflicts with the dictated index procedure (e.g. Case DB TKA vs dictated THA)
+      if (matchedCaseData && activeStructuredSections.indexProcedure) {
+        matchedCaseData = selectCaseMatchingProcedure(matchedCaseData, activeStructuredSections.indexProcedure);
+      }
 
       // 2. Auto-route or voice-override clinical template
       const tmplSelect = document.getElementById("templateSelect");
@@ -5010,6 +5096,30 @@ Extract and return ONLY valid JSON matching:
         document.getElementById("clinicProcDetails").value = String(fieldUpdates.clinicProcDetails).trim();
       }
 
+      // In-clinic injection / aspiration (CPT 20610 / 20611) from top-level Stage 2 fields
+      const aiProcType = parsed.clinicProcType && CLINIC_PROC_DEFAULT_DETAILS.hasOwnProperty(parsed.clinicProcType) ? parsed.clinicProcType : null;
+      const procSel = document.getElementById("clinicProcType");
+      if (aiProcType && aiProcType !== "none" && procSel) {
+        procSel.value = aiProcType;
+        const detEl = document.getElementById("clinicProcDetails");
+        const dictatedDetails = (parsed.clinicProcDetails && String(parsed.clinicProcDetails).trim()) || "";
+        if (detEl) {
+          if (dictatedDetails) {
+            const hasDose = /\d\s*(?:mg|ml|cc|mL)\b/i.test(dictatedDetails);
+            detEl.value = (!hasDose && (aiProcType === "inj_20610" || aiProcType === "inj_20611"))
+              ? `${DEFAULT_CORTICOSTEROID_COCKTAIL} (${dictatedDetails})`
+              : dictatedDetails;
+          } else {
+            detEl.value = CLINIC_PROC_DEFAULT_DETAILS[aiProcType] || "";
+          }
+        }
+        const jointEl = document.getElementById("clinicProcJoint");
+        if (jointEl) {
+          const aiJoint = (parsed.clinicProcJoint && String(parsed.clinicProcJoint).trim()) || "";
+          if (aiJoint) jointEl.value = aiJoint;
+        }
+      }
+
       // Support top-level field fallbacks in addition to formFieldUpdates
       if (parsed.etiology && document.getElementById("etiology")) document.getElementById("etiology").value = parsed.etiology;
       if (parsed.hipIR && document.getElementById("hipIR")) document.getElementById("hipIR").value = parsed.hipIR;
@@ -5019,13 +5129,13 @@ Extract and return ONLY valid JSON matching:
       if (resolvedKneeRom && document.getElementById("kneeROM")) document.getElementById("kneeROM").value = resolvedKneeRom;
       if (parsed.kneeStab && document.getElementById("kneeStab")) document.getElementById("kneeStab").value = parsed.kneeStab;
 
-      const resolvedIndexProc = fieldUpdates.postopIndexProc || parsed.indexProcedure || localCues.indexProcedure || (matchedCaseData ? formatCaseProcedureWithLaterality(matchedCaseData) : "");
+      const resolvedIndexProc = aiIndexProc || fieldUpdates.postopIndexProc || localCues.indexProcedure || (matchedCaseData ? formatCaseProcedureWithLaterality(matchedCaseData) : "");
       if (resolvedIndexProc) {
         if (document.getElementById("postopIndexProc")) document.getElementById("postopIndexProc").value = resolvedIndexProc;
         if (document.getElementById("jointId") && !fieldUpdates.jointId) document.getElementById("jointId").value = resolvedIndexProc;
         if (document.getElementById("soapJointRegion") && !fieldUpdates.soapJointRegion) document.getElementById("soapJointRegion").value = resolvedIndexProc;
       }
-      const resolvedIndexDos = fieldUpdates.postopIndexDos || parsed.indexSurgeryDate || parsed.indexDos || localCues.indexDos || (matchedCaseData && matchedCaseData.dos ? matchedCaseData.dos : "");
+      const resolvedIndexDos = aiIndexDos || fieldUpdates.postopIndexDos || parsed.indexDos || localCues.indexDos || (matchedCaseData && matchedCaseData.dos ? matchedCaseData.dos : "");
       if (resolvedIndexDos && document.getElementById("postopIndexDos")) {
         document.getElementById("postopIndexDos").value = resolvedIndexDos;
       }
@@ -5088,7 +5198,7 @@ Extract and return ONLY valid JSON matching:
         ? localCues.waitlist_signup
         : parsed;
 
-      if (activeEncounterStage === "Pre-Visit" && (wlSignup.signedUpForSurgery || fieldUpdates.clinicProcType || activeStructuredSections.physical_exam || resolvedKneeRom)) {
+      if (activeEncounterStage === "Pre-Visit" && (wlSignup.signedUpForSurgery || fieldUpdates.clinicProcType || (aiProcType && aiProcType !== "none") || activeStructuredSections.physical_exam || resolvedKneeRom)) {
         activeEncounterStage = "In-Clinic";
         updateStageButtons();
       }
@@ -5221,6 +5331,36 @@ Extract and return ONLY valid JSON matching:
           ebl: { type: "STRING", nullable: true },
           implants: { type: "STRING", nullable: true },
           closure: { type: "STRING", nullable: true, enum: ["default", "prineo", "prevena"] },
+          visitDisposition: {
+            type: "STRING",
+            enum: ["nonoperative", "surgical_candidate", "undecided"],
+            description: "nonoperative = plan is conservative care (PT, NSAIDs, bracing, weight loss, injection, deferring surgery); surgical_candidate = patient elects/consents/signs up for surgery; undecided = options discussed without a decision."
+          },
+          indexProcedure: {
+            type: "STRING",
+            nullable: true,
+            description: "For post-op visits: the prior index operation exactly as dictated, with laterality and joint (e.g. 'Right Direct Anterior Total Hip Arthroplasty'). Never substitute a different joint. Null if not dictated."
+          },
+          indexSurgeryDate: {
+            type: "STRING",
+            nullable: true,
+            description: "For post-op visits: index surgery date as dictated (e.g. '10/28/2026'). Null if not dictated."
+          },
+          clinicProcType: {
+            type: "STRING",
+            enum: ["none", "inj_20610", "inj_20611", "visco_20610", "asp_pji"],
+            description: "In-clinic procedure performed TODAY: inj_20610 = landmark corticosteroid injection; inj_20611 = ultrasound/fluoroscopy-guided injection; visco_20610 = hyaluronic acid/gel injection; asp_pji = diagnostic aspiration/arthrocentesis; none = no procedure performed today (a planned future injection is 'none')."
+          },
+          clinicProcJoint: {
+            type: "STRING",
+            nullable: true,
+            description: "Target joint and laterality of today's in-clinic procedure (e.g. 'Right Knee'). Null if none."
+          },
+          clinicProcDetails: {
+            type: "STRING",
+            nullable: true,
+            description: "Injectate drugs/doses or aspirate volume/appearance/labs exactly as dictated. Null if doses were not dictated."
+          },
           formFieldUpdates: {
             type: "OBJECT",
             nullable: true,
@@ -5344,6 +5484,12 @@ Extract and return ONLY valid JSON matching:
           "ebl",
           "implants",
           "closure",
+          "visitDisposition",
+          "indexProcedure",
+          "indexSurgeryDate",
+          "clinicProcType",
+          "clinicProcJoint",
+          "clinicProcDetails",
           "formFieldUpdates",
           "one_liner_summary",
           "orders_needed_on_arrival",
@@ -5462,7 +5608,10 @@ Strictly partition the physician's transcript into distinct clinical sections an
 5. operative_details, ebl, implants, closure ("default" | "prineo" | "prevena"): Populate when operative details, blood loss, implants, or wound closure are dictated.
 6. explicitVoiceTemplateOverride & detectedModule: Set explicitVoiceTemplateOverride ONLY if the surgeon explicitly asked by voice to use/switch to a specific template, and strip that spoken meta-command from all clinical text fields.
 7. formFieldUpdates: Populate matching active template input fields (hipIR, hipFC, kneeROM, kneeStab, postopInterval, postopIncision, pjiLabs, pjiAsp, clinicProcType, optAnticoag, optGlp1, etc.).
-8. waitlist_signup: Set signedUpForSurgery=true whenever the patient is signing up, consenting, or being scheduled for surgery, and extract plannedSurgery, specialImplants, infectionWorkupNeeded, infectionWorkupDetails, targetSurgeryWindow, and specialistClearances.`;
+8. waitlist_signup: Set signedUpForSurgery=true whenever the patient is signing up, consenting, or being scheduled for surgery, and extract plannedSurgery, specialImplants, infectionWorkupNeeded, infectionWorkupDetails, targetSurgeryWindow, and specialistClearances.
+9. visitDisposition: "nonoperative" when the plan is conservative care (physical therapy, NSAIDs, bracing, weight loss, injection, or deferring surgery); "surgical_candidate" ONLY when the patient elects, consents, or signs up for surgery; otherwise "undecided". Never describe a patient as indicated for arthroplasty unless surgical_candidate.
+10. indexProcedure / indexSurgeryDate: For post-op visits, copy the prior operation (joint + laterality + approach) and date exactly as dictated. Never convert a hip (THA) into a knee (TKA) or vice versa, even if a Case DB record lists a different joint; the dictation wins.
+11. clinicProcType / clinicProcJoint / clinicProcDetails: Set only if an injection or aspiration was PERFORMED today. Copy injectate drugs/doses or aspirate details exactly as dictated (null if doses not dictated).`;
 
       const userPromptText = `Active Template ID: "${moduleType}"
 ${caseContextStr}
@@ -5622,9 +5771,20 @@ ${cleanTranscript}
                 physical_exam: parsed.physical_exam || "",
                 radiographic_findings: parsed.radiographic_findings || "",
                 assessment_and_plan: parsed.assessment_and_plan || "",
-                operative_details: parsed.operative_details || ""
+                operative_details: parsed.operative_details || "",
+                visitDisposition: (parsed.waitlist_signup && parsed.waitlist_signup.signedUpForSurgery === true) ? "surgical_candidate" : (parsed.visitDisposition || ""),
+                surgicalSignup: Boolean(parsed.waitlist_signup && parsed.waitlist_signup.signedUpForSurgery === true),
+                indexProcedure: parsed.indexProcedure || "",
+                indexSurgeryDate: parsed.indexSurgeryDate || ""
               };
               enc.formValues = { ...(enc.formValues || {}), ...(parsed.formFieldUpdates || {}) };
+              if (parsed.indexProcedure) enc.formValues.postopIndexProc = parsed.indexProcedure;
+              if (parsed.indexSurgeryDate) enc.formValues.postopIndexDos = parsed.indexSurgeryDate;
+              if (parsed.clinicProcType && parsed.clinicProcType !== "none") {
+                enc.formValues.clinicProcType = parsed.clinicProcType;
+                enc.formValues.clinicProcDetails = parsed.clinicProcDetails || CLINIC_PROC_DEFAULT_DETAILS[parsed.clinicProcType] || "";
+                if (parsed.clinicProcJoint) enc.formValues.clinicProcJoint = parsed.clinicProcJoint;
+              }
               if (parsed.laterality) enc.formValues.lat = parsed.laterality;
               if (parsed.ebl) enc.formValues.opEbl = parsed.ebl;
               if (parsed.implants) enc.formValues.opImplants = parsed.implants;
@@ -6609,7 +6769,7 @@ ${cleanTranscript}
           </div>
         `;
       } else if (type === "postop") {
-        const defaultProc = (matchedCaseData ? formatCaseProcedureWithLaterality(matchedCaseData) : "") || "Left Total Knee Arthroplasty";
+        const defaultProc = (matchedCaseData ? formatCaseProcedureWithLaterality(matchedCaseData) : "") || (activeStructuredSections && activeStructuredSections.indexProcedure) || "";
         const defaultDos = (matchedCaseData && matchedCaseData.dos) ? matchedCaseData.dos : "";
         const defaultSurgeon = "Dr. Spencer Schulte, MD (Personal Case Log)";
         const defaultInterval = (matchedCaseData && matchedCaseData.dos)
@@ -6629,7 +6789,7 @@ ${cleanTranscript}
             </div>
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Index Procedure</label>
-              <input id="postopIndexProc" oninput="assembleNote()" type="text" value="${escapeHtml(defaultProc)}" placeholder="e.g. Left Total Knee Arthroplasty" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <input id="postopIndexProc" oninput="assembleNote()" type="text" value="${escapeHtml(defaultProc)}" placeholder="e.g. Right Direct Anterior THA" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
             </div>
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Index Surgery Date (DOS)</label>
@@ -7691,6 +7851,7 @@ ${cleanTranscript}
       const preloadedXray = (document.getElementById("xrayFindingsInput") ? document.getElementById("xrayFindingsInput").value.trim() : "") || structXr || "";
       const preloadedOrders = (document.getElementById("preVisitOrdersInput") ? document.getElementById("preVisitOrdersInput").value.trim() : "") || localCues.ordersNeeded || "";
       const clinicalNarrative = structHpi || localCues.polishedNarrative || combinedRawDictation;
+      const visitDisposition = resolveVisitDisposition(structPlan || (!isDefaultInstructions ? rawInstructionsInput : ""));
       let note = "";
 
       if (type === "general_soap") {
@@ -7764,45 +7925,78 @@ ASSESSMENT & PLAN:
           }
         };
         const icdCode = (icdMap[eti] && icdMap[eti][lat]) ? icdMap[eti][lat] : `M16.11 — Primary osteoarthritis, ${lat} hip`;
+        const isSurgicalHip = visitDisposition === "surgical_candidate";
+        const hipMeasurements = [];
+        if (ir && ir !== "5°") hipMeasurements.push(`Internal rotation at 90° flexion ${ir}`);
+        if (fc && fc !== "0°") hipMeasurements.push(`Flexion contracture ${fc}`);
 
-        note = `ADULT RECONSTRUCTION CLINICAL CONSULTATION - NEW HIP
-PATIENT: ${ptName} | DEMOGRAPHICS: ${ageGender}
-DATE OF SERVICE: ${new Date().toLocaleDateString()}
-ATTENDING SURGEON: Dr. Spencer Schulte, MD (Adult Reconstruction)
-FACILITY: Eisenhower Army Medical Center (DDEAMC)
-BILLING & CODING: ICD-10-CM: ${icdCode} | Planned CPT: 27130 (Total Hip Arthroplasty) | E/M Level: 99204 / 99214 (Moderate-to-High MDM)
+        const hipHpiSection = structHpi
+          ? structHpi
+          : isSurgicalHip
+          ? `${ageGender} patient presents for comprehensive orthopedic evaluation of chronic, progressive, debilitating ${lat} hip pain secondary to end-stage ${eti}.
+${clinicalNarrative ? `Clinical Summary: ${clinicalNarrative}\n` : ""}Symptom Severity & Functional ADL Impairment: Pain is localized deep in the ${lat} anterior groin and peritrochanteric region (>6 months duration), rated severe with weight-bearing, startup ambulation, and stair negotiation. Symptoms significantly restrict activities of daily living (ADLs), including ambulation tolerance (<1-2 blocks), donning shoes/socks, rising from a seated position, and restorative sleep.`
+          : `${ageGender} patient presents for orthopedic evaluation of ${lat} hip pain (${eti}).${clinicalNarrative ? `\nClinical Summary: ${clinicalNarrative}` : ""}`;
 
-CHIEF COMPLAINT & HISTORY OF PRESENT ILLNESS (HPI):
-${ageGender} patient presents for comprehensive orthopedic evaluation of chronic, progressive, debilitating ${lat} hip pain secondary to end-stage ${eti}.
-${clinicalNarrative ? `Clinical Summary: ${clinicalNarrative}\n` : ""}Symptom Severity & Functional ADL Impairment: Pain is localized deep in the ${lat} anterior groin and peritrochanteric region (>6 months duration), rated severe with weight-bearing, startup ambulation, and stair negotiation. Symptoms significantly restrict activities of daily living (ADLs), including ambulation tolerance (<1-2 blocks), donning shoes/socks, rising from a seated position, and restorative sleep.
-
-PRIOR CONSERVATIVE MANAGEMENT (PAYER MEDICAL NECESSITY VERIFICATION — >12 WEEKS FAILED TRIAL):
-Patient has completed and exhausted >12 weeks (3+ months) of comprehensive, supervised nonoperative management without durable symptom relief or functional restoration:
-- Pharmacologic Therapy: Trialed scheduled oral NSAIDs and non-opioid analgesics (as medically tolerated) with inadequate pain control.
-- Physical Therapy & Biomechanical Modification: Completed structured physical therapy / home exercise program (HEP) focusing on periarticular strengthening, gait training, activity modification, and assistive device utilization.
-- Injections / Adjuncts: Evaluated for/exhausted conservative intra-articular modalities and weight/load optimization; symptoms remain refractory and progressively disabling.
-
-PHYSICAL EXAMINATION:
-- Constitutional & Gait: Alert, oriented, in no acute distress. Antalgic Trendelenburg-compensated gait favoring the ${lat} lower extremity.
-- Skin & Soft Tissue Envelope: Intact over the ${lat} anterior/lateral hip without erythema, induration, sinus tracts, or active local skin infection.${structPe ? `\n- Focused Physical Exam Findings: ${structPe}` : ""}
+        const hipPeSection = structPe
+          ? `${structPe}${hipMeasurements.length ? `\n- Documented Measurements: ${hipMeasurements.join("; ")}.` : ""}`
+          : `- Constitutional & Gait: Alert, oriented, in no acute distress. Antalgic Trendelenburg-compensated gait favoring the ${lat} lower extremity.
+- Skin & Soft Tissue Envelope: Intact over the ${lat} anterior/lateral hip without erythema, induration, sinus tracts, or active local skin infection.
 - ${lat} Hip Range of Motion & Special Testing:
   * Flexion: 100° with reproducible deep anterior groin pain at terminal arc.
   * Flexion Contracture: ${fc}.
   * Internal Rotation at 90° Flexion: ${ir} (markedly restricted with mechanical block and concordant groin pain).
   * External Rotation at 90° Flexion: 25° with end-range stiffness.
   * Provocative Tests: Positive Stinchfield resisted straight-leg raise; positive anterior impingement (FADIR) and log-roll groin pain; 4+/5 abductor strength.
-- Distal Neurovascular Status: Dorsalis pedis (DP) and posterior tibial (PT) pulses 2+ and symmetric. Motor (EHL/TA/Gastroc) 5/5 and sensation intact throughout L2-S1 dermatomes. Calves soft and nontender.
+- Distal Neurovascular Status: Dorsalis pedis (DP) and posterior tibial (PT) pulses 2+ and symmetric. Motor (EHL/TA/Gastroc) 5/5 and sensation intact throughout L2-S1 dermatomes. Calves soft and nontender.`;
+
+        const hipXrSection = preloadedXray
+          ? `Standing AP Pelvis and ${lat} hip radiographs personally reviewed and independently interpreted by Dr. Spencer Schulte, MD:\n- Findings: ${preloadedXray}`
+          : isSurgicalHip
+          ? `Standing AP Pelvis, AP ${lat} Hip, and Frog-Leg / Cross-Table Lateral views obtained and personally reviewed and independently interpreted by Dr. Spencer Schulte, MD:\n- Findings: Severe end-stage degenerative joint disease (Kellgren-Lawrence Grade IV) of the ${lat} hip characterized by near-complete (<2 mm / bone-on-bone) superior/axial joint space obliteration, dense subchondral sclerosis, marginal acetabular and femoral osteophytosis, and subchondral cyst formation consistent with advanced ${eti}. Pelvis and proximal femoral canal morphology evaluated for digital arthroplasty templating.`
+          : `Standing AP Pelvis and ${lat} hip radiographs personally reviewed and independently interpreted by Dr. Spencer Schulte, MD; findings reviewed with the patient.`;
+
+        const hipConservativeBlock = isSurgicalHip ? `
+
+PRIOR CONSERVATIVE MANAGEMENT (PAYER MEDICAL NECESSITY VERIFICATION — >12 WEEKS FAILED TRIAL):
+Patient has completed and exhausted >12 weeks (3+ months) of comprehensive, supervised nonoperative management without durable symptom relief or functional restoration:
+- Pharmacologic Therapy: Trialed scheduled oral NSAIDs and non-opioid analgesics (as medically tolerated) with inadequate pain control.
+- Physical Therapy & Biomechanical Modification: Completed structured physical therapy / home exercise program (HEP) focusing on periarticular strengthening, gait training, activity modification, and assistive device utilization.
+- Injections / Adjuncts: Evaluated for/exhausted conservative intra-articular modalities and weight/load optimization; symptoms remain refractory and progressively disabling.` : "";
+
+        const hipPlanSection = isSurgicalHip
+          ? `MEDICAL DECISION MAKING (MDM), ASSESSMENT & PLAN:
+1. Diagnosis: End-stage ${eti} of the ${lat} hip (${icdCode}), refractory to >12 weeks of comprehensive nonoperative management with severe functional ADL limitation.
+2. Surgical Indication & Shared Decision-Making: Indicated for joint arthroplasty — discussed continued nonoperative management versus elective ${lat} Direct Anterior Total Hip Arthroplasty (CPT 27130); patient elects to proceed. Given severe daily pain, mechanical loss of motion, radiographic degeneration, and failure of >3 months of conservative therapy, the patient meets clinical and payer medical necessity criteria for Total Hip Arthroplasty.
+3. Informed Consent & Counseling: Reviewed the muscle-sparing Direct Anterior intermuscular interval, fluoroscopic component positioning, rapid rehabilitation pathway, and material risks/alternatives (including periprosthetic joint infection, bleeding, DVT/PE, leg-length discrepancy, dislocation/instability, periprosthetic femur fracture, lateral femoral cutaneous nerve [LFCN] neuropraxia, and implant wear/loosening).
+4. Preoperative surgical clearance initiated: Screened for modifiable surgical risk factors (no active infection, dental clearance verified/ordered, glycemic/medical optimization, and multimodal DVT chemoprophylaxis plan).
+5. Plan: ${structPlan || instructions}${preloadedOrders ? ` | Day-Of Workup: ${preloadedOrders}` : ""}`
+          : visitDisposition === "nonoperative"
+          ? `MEDICAL DECISION MAKING (MDM), ASSESSMENT & PLAN — NONOPERATIVE / CONSERVATIVE MANAGEMENT:
+Diagnosis: ${lat} hip ${eti} (${icdCode}).
+${structPlan || "1. Continue conservative management: activity modification, home exercise program / physical therapy, and NSAIDs / acetaminophen as medically tolerated.\n2. Return to clinic for reassessment as needed."}
+Counseling: Reviewed the natural history of hip arthritis and the role of activity modification, weight optimization, structured physical therapy, anti-inflammatory medication as medically tolerated, and intra-articular injection. Patient elects continued nonoperative management at this time; pain and function will be reassessed at follow-up. Return precautions reviewed.${preloadedOrders ? `\nOrders: ${preloadedOrders}` : ""}`
+          : `MEDICAL DECISION MAKING (MDM), ASSESSMENT & PLAN:
+Diagnosis: ${lat} hip ${eti} (${icdCode}).
+${structPlan || "1. Discussed treatment options including continued conservative management (activity modification, physical therapy, NSAIDs, injection) and surgical options; patient will consider options and follow up."}
+Shared Decision-Making: Risks, benefits, and alternatives of operative and nonoperative care were reviewed; no definitive surgical decision was made at today's visit.${preloadedOrders ? `\nOrders: ${preloadedOrders}` : ""}`;
+
+        note = `ADULT RECONSTRUCTION CLINICAL CONSULTATION - NEW HIP
+PATIENT: ${ptName} | DEMOGRAPHICS: ${ageGender}
+DATE OF SERVICE: ${new Date().toLocaleDateString()}
+ATTENDING SURGEON: Dr. Spencer Schulte, MD (Adult Reconstruction)
+FACILITY: Eisenhower Army Medical Center (DDEAMC)
+BILLING & CODING: ICD-10-CM: ${icdCode}${isSurgicalHip ? " | Planned CPT: 27130 (Total Hip Arthroplasty)" : ""} | MDM: Moderate-to-High | E/M Level: 99204 / 99214
+
+CHIEF COMPLAINT & HISTORY OF PRESENT ILLNESS (HPI):
+${hipHpiSection}${hipConservativeBlock}
+
+PHYSICAL EXAMINATION:
+${hipPeSection}
 
 INDEPENDENT RADIOGRAPHIC INTERPRETATION (PERSONAL REVIEW BY ATTENDING SURGEON):
-Standing AP Pelvis, AP ${lat} Hip, and Frog-Leg / Cross-Table Lateral views obtained and personally reviewed and independently interpreted by Dr. Spencer Schulte, MD:
-- Findings: ${preloadedXray ? `${preloadedXray}. ` : ""}Severe end-stage degenerative joint disease (Kellgren-Lawrence Grade IV) of the ${lat} hip characterized by near-complete (<2 mm / bone-on-bone) superior/axial joint space obliteration, dense subchondral sclerosis, marginal acetabular and femoral osteophytosis, and subchondral cyst formation consistent with advanced ${eti}. Pelvis and proximal femoral canal morphology evaluated for digital arthroplasty templating.${preloadedOrders ? `\n- Imaging / Workup Protocol: ${preloadedOrders}` : ""}
+${hipXrSection}${preloadedOrders && isSurgicalHip ? `\n- Imaging / Workup Protocol: ${preloadedOrders}` : ""}
 
-MEDICAL DECISION MAKING (MDM), ASSESSMENT & PLAN:
-1. Diagnosis: End-stage ${eti} of the ${lat} hip (${icdCode}), refractory to >12 weeks of comprehensive nonoperative management with severe functional ADL limitation.
-2. Surgical Indication & Shared Decision-Making: Discussed continued nonoperative management versus elective ${lat} Direct Anterior Total Hip Arthroplasty (CPT 27130). Given severe daily pain, mechanical loss of motion, Kellgren-Lawrence Grade IV radiographic degeneration, and failure of >3 months of conservative therapy, the patient meets all clinical and payer medical necessity criteria for Total Hip Arthroplasty.
-3. Informed Consent & Counseling: Reviewed the muscle-sparing Direct Anterior intermuscular interval, fluoroscopic component positioning, rapid rehabilitation pathway, and material risks/alternatives (including periprosthetic joint infection, bleeding, DVT/PE, leg-length discrepancy, dislocation/instability, periprosthetic femur fracture, lateral femoral cutaneous nerve [LFCN] neuropraxia, and implant wear/loosening).
-4. Preoperative Optimization & Modifiable Risk Factor Screen: Screened for modifiable surgical risk factors (no active infection, dental clearance verified/ordered, glycemic/medical optimization, and multimodal DVT chemoprophylaxis plan).
-5. Perioperative Plan / Precautions: ${structPlan || instructions}${preloadedOrders ? ` | Day-Of Workup: ${preloadedOrders}` : ""}`;
+${hipPlanSection}`;
 
       } else if (type === "new_knee") {
         const lat = localCues.laterality || (document.getElementById("lat") ? document.getElementById("lat").value : "Right");
@@ -7817,43 +8011,77 @@ MEDICAL DECISION MAKING (MDM), ASSESSMENT & PLAN:
         };
         const icdCode = kneeIcdMap[lat] || `M17.11 — Primary osteoarthritis, ${lat} knee`;
         const cptCode = comp === "Isolated Medial" ? "27446 (Unicompartmental Knee Arthroplasty)" : "27447 (Total Knee Arthroplasty)";
+        const isSurgicalKnee = visitDisposition === "surgical_candidate";
+        const kneeDxLabel = comp === "Tricompartmental" ? `${lat} knee osteoarthritis` : `${lat} knee ${comp.toLowerCase()} osteoarthritis`;
+        const kneeMeasurements = [];
+        if (rom && rom !== "0° - 110°") kneeMeasurements.push(`ROM ${rom}`);
+        if (stab && stab !== "Stable varus/valgus, intact ACL") kneeMeasurements.push(`Stability: ${stab}`);
+
+        const kneeHpiSection = structHpi
+          ? structHpi
+          : isSurgicalKnee
+          ? `${ageGender} patient presents for orthopedic evaluation of chronic, progressive, debilitating ${lat} knee pain secondary to end-stage ${comp} osteoarthritis.
+${clinicalNarrative ? `Clinical Summary: ${clinicalNarrative}\n` : ""}Symptom Severity & Functional ADL Impairment: Patient reports severe mechanical weight-bearing knee pain (>6 months duration), startup stiffness, painful crepitation, and recurrent joint effusion. Pain markedly limits activities of daily living (ADLs), including community ambulation (<1-2 blocks), ascending/descending stairs, rising from chairs, and sleep quality.`
+          : `${ageGender} patient presents for orthopedic evaluation of ${lat} knee pain (${comp} osteoarthritis).${clinicalNarrative ? `\nClinical Summary: ${clinicalNarrative}` : ""}`;
+
+        const kneePeSection = structPe
+          ? `${structPe}${kneeMeasurements.length ? `\n- Documented Measurements: ${kneeMeasurements.join("; ")}.` : ""}`
+          : `- Alignment & Gait: Antalgic gait favoring the ${lat} knee; mild coronal deformity correctable to neutral without gross thrust.
+- Skin & Effusion: Skin intact over the ${lat} anterior knee without erythema or open lesions. Mild-to-moderate intra-articular effusion and joint line osteophyte prominence.
+- ${lat} Knee Range of Motion & Stability:
+  * Active/Passive Arc of Motion: ${rom} with painful terminal flexion/extension and audible patellofemoral/tibiofemoral crepitus.
+  * Joint Line Tenderness: Marked tenderness along the ${comp.toLowerCase()} compartment joint space.
+  * Ligamentous Stability: ${stab}.
+- Distal Neurovascular Status: DP and PT pulses 2+ and symmetric. Motor (EHL/TA/Gastroc) 5/5 and sensation intact throughout L4-S1 distributions. Calves soft and nontender.`;
+
+        const kneeXrSection = preloadedXray
+          ? `Standing weight-bearing ${lat} knee radiographs personally reviewed and independently interpreted by Dr. Spencer Schulte, MD:\n- Findings: ${preloadedXray}`
+          : isSurgicalKnee
+          ? `Standing Weight-Bearing AP, Lateral, 45° Flexion PA (Rosenberg), and Merchant/Sunrise radiographs personally reviewed and independently interpreted by Dr. Spencer Schulte, MD:\n- Findings: Advanced end-stage osteoarthritis (Kellgren-Lawrence Grade IV) of the ${lat} knee (${comp}) demonstrating severe (<2 mm / bone-on-bone) joint space loss, subchondral cortical sclerosis, marginal osteophyte formation, and coronal angular narrowing.`
+          : `Standing weight-bearing ${lat} knee radiographs personally reviewed and independently interpreted by Dr. Spencer Schulte, MD; findings reviewed with the patient.`;
+
+        const kneeConservativeBlock = isSurgicalKnee ? `
+
+PRIOR CONSERVATIVE MANAGEMENT (PAYER MEDICAL NECESSITY VERIFICATION — >12 WEEKS FAILED TRIAL):
+Patient has completed and exhausted >12 weeks (3+ months) of structured nonoperative therapy without sustained relief:
+- Pharmacologic Therapy: Trialed oral NSAIDs, acetaminophen, and topical anti-inflammatory agents (as tolerated) with persistent daily pain.
+- Physical Therapy & Bracing: Completed supervised physical therapy / quadriceps strengthening home exercise program (HEP), activity modification, and assistive device/unloader trial.
+- Intra-Articular Injections: Corticosteroid and/or viscosupplementation injections provided diminishing or transient benefit; symptoms remain refractory.` : "";
+
+        const kneePlanSection = isSurgicalKnee
+          ? `MEDICAL DECISION MAKING (MDM), ASSESSMENT & PLAN:
+1. Diagnosis: End-stage ${comp} osteoarthritis of the ${lat} knee (${icdCode}), refractory to >12 weeks of comprehensive conservative management.
+2. Surgical Indication & Shared Decision-Making: Indicated for joint arthroplasty — discussed continued nonoperative care versus surgical reconstruction (${cptCode}); patient elects to proceed and meets clinical, radiographic, and payer medical necessity criteria.
+3. Informed Consent & Counseling: Reviewed operative technique, multimodal analgesia (adductor canal block), early ROM/ambulation protocol, and risks (periprosthetic infection, stiffness/arthrofibrosis, DVT/PE, neurovascular injury, instability, implant loosening, and persistent discomfort).
+4. Preoperative surgical clearance initiated: Screened for modifiable surgical risk factors (absence of active infection, dental clearance, glycemic control, and DVT chemoprophylaxis plan).
+5. Plan: ${structPlan || instructions}${preloadedOrders ? ` | Day-Of Workup: ${preloadedOrders}` : ""}`
+          : visitDisposition === "nonoperative"
+          ? `MEDICAL DECISION MAKING (MDM), ASSESSMENT & PLAN — NONOPERATIVE / CONSERVATIVE MANAGEMENT:
+Diagnosis: ${kneeDxLabel} (${icdCode}).
+${structPlan || "1. Continue conservative management: activity modification, quadriceps-strengthening home exercise program / physical therapy, and NSAIDs / acetaminophen as medically tolerated.\n2. Return to clinic for reassessment as needed."}
+Counseling: Reviewed the natural history of knee arthritis and the role of activity modification, weight optimization, structured physical therapy, bracing, anti-inflammatory medication as medically tolerated, and intra-articular injection. Patient elects continued nonoperative management at this time; pain and function will be reassessed at follow-up. Return precautions reviewed.${preloadedOrders ? `\nOrders: ${preloadedOrders}` : ""}`
+          : `MEDICAL DECISION MAKING (MDM), ASSESSMENT & PLAN:
+Diagnosis: ${kneeDxLabel} (${icdCode}).
+${structPlan || "1. Discussed treatment options including continued conservative management (activity modification, physical therapy, NSAIDs, bracing, injection) and surgical options; patient will consider options and follow up."}
+Shared Decision-Making: Risks, benefits, and alternatives of operative and nonoperative care were reviewed; no definitive surgical decision was made at today's visit.${preloadedOrders ? `\nOrders: ${preloadedOrders}` : ""}`;
 
         note = `ADULT RECONSTRUCTION CLINICAL CONSULTATION - NEW KNEE
 PATIENT: ${ptName} | DEMOGRAPHICS: ${ageGender}
 DATE OF SERVICE: ${new Date().toLocaleDateString()}
 ATTENDING SURGEON: Dr. Spencer Schulte, MD (Adult Reconstruction)
 FACILITY: Eisenhower Army Medical Center (DDEAMC)
-BILLING & CODING: ICD-10-CM: ${icdCode} | Planned CPT: ${cptCode} | E/M Level: 99204 / 99214 (Moderate-to-High MDM)
+BILLING & CODING: ICD-10-CM: ${icdCode}${isSurgicalKnee ? ` | Planned CPT: ${cptCode}` : ""} | MDM: Moderate-to-High | E/M Level: 99204 / 99214
 
 CHIEF COMPLAINT & HISTORY OF PRESENT ILLNESS (HPI):
-${ageGender} patient presents for orthopedic evaluation of chronic, progressive, debilitating ${lat} knee pain secondary to end-stage ${comp} osteoarthritis.
-${clinicalNarrative ? `Clinical Summary: ${clinicalNarrative}\n` : ""}Symptom Severity & Functional ADL Impairment: Patient reports severe mechanical weight-bearing knee pain (>6 months duration), startup stiffness, painful crepitation, and recurrent joint effusion. Pain markedly limits activities of daily living (ADLs), including community ambulation (<1-2 blocks), ascending/descending stairs, rising from chairs, and sleep quality.
-
-PRIOR CONSERVATIVE MANAGEMENT (PAYER MEDICAL NECESSITY VERIFICATION — >12 WEEKS FAILED TRIAL):
-Patient has completed and exhausted >12 weeks (3+ months) of structured nonoperative therapy without sustained relief:
-- Pharmacologic Therapy: Trialed oral NSAIDs, acetaminophen, and topical anti-inflammatory agents (as tolerated) with persistent daily pain.
-- Physical Therapy & Bracing: Completed supervised physical therapy / quadriceps strengthening home exercise program (HEP), activity modification, and assistive device/unloader trial.
-- Intra-Articular Injections: Corticosteroid and/or viscosupplementation injections provided diminishing or transient benefit; symptoms remain refractory.
+${kneeHpiSection}${kneeConservativeBlock}
 
 PHYSICAL EXAMINATION:
-- Alignment & Gait: Antalgic gait favoring the ${lat} knee; mild coronal deformity correctable to neutral without gross thrust.
-- Skin & Effusion: Skin intact over the ${lat} anterior knee without erythema or open lesions. Mild-to-moderate intra-articular effusion and joint line osteophyte prominence.${structPe ? `\n- Focused Physical Exam Findings: ${structPe}` : ""}
-- ${lat} Knee Range of Motion & Stability:
-  * Active/Passive Arc of Motion: ${rom} with painful terminal flexion/extension and audible patellofemoral/tibiofemoral crepitus.
-  * Joint Line Tenderness: Marked tenderness along the ${comp.toLowerCase()} compartment joint space.
-  * Ligamentous Stability: ${stab}.
-- Distal Neurovascular Status: DP and PT pulses 2+ and symmetric. Motor (EHL/TA/Gastroc) 5/5 and sensation intact throughout L4-S1 distributions. Calves soft and nontender.
+${kneePeSection}
 
 INDEPENDENT RADIOGRAPHIC INTERPRETATION (PERSONAL REVIEW BY ATTENDING SURGEON):
-Standing Weight-Bearing AP, Lateral, 45° Flexion PA (Rosenberg), and Merchant/Sunrise radiographs personally reviewed and independently interpreted by Dr. Spencer Schulte, MD:
-- Findings: ${preloadedXray ? `${preloadedXray}. ` : ""}Advanced end-stage osteoarthritis (Kellgren-Lawrence Grade IV) of the ${lat} knee (${comp}) demonstrating severe (<2 mm / bone-on-bone) joint space loss, subchondral cortical sclerosis, marginal osteophyte formation, and coronal angular narrowing.${preloadedOrders ? `\n- Imaging / Workup Protocol: ${preloadedOrders}` : ""}
+${kneeXrSection}${preloadedOrders && isSurgicalKnee ? `\n- Imaging / Workup Protocol: ${preloadedOrders}` : ""}
 
-MEDICAL DECISION MAKING (MDM), ASSESSMENT & PLAN:
-1. Diagnosis: End-stage ${comp} osteoarthritis of the ${lat} knee (${icdCode}), refractory to >12 weeks of comprehensive conservative management.
-2. Surgical Indication & Shared Decision-Making: Discussed continued nonoperative care versus surgical reconstruction (${cptCode}). Patient meets all clinical, radiographic (KL Grade IV), and payer medical necessity criteria for joint arthroplasty.
-3. Informed Consent & Counseling: Reviewed operative technique, multimodal analgesia (adductor canal block), early ROM/ambulation protocol, and risks (periprosthetic infection, stiffness/arthrofibrosis, DVT/PE, neurovascular injury, instability, implant loosening, and persistent discomfort).
-4. Preoperative Optimization & Modifiable Risk Factor Screen: Screened for modifiable surgical risk factors (absence of active infection, dental clearance, glycemic control, and DVT chemoprophylaxis plan).
-5. Perioperative Plan / Precautions: ${structPlan || instructions}${preloadedOrders ? ` | Day-Of Workup: ${preloadedOrders}` : ""}`;
+${kneePlanSection}`;
       } else if (type === "painful_joint") {
         const joint = (document.getElementById("jointId") ? document.getElementById("jointId").value : "") || localCues.indexProcedure || "Right Total Knee Arthroplasty";
         const pfi = document.getElementById("pfi") ? document.getElementById("pfi").value : "Interval";
@@ -7862,21 +8090,25 @@ MEDICAL DECISION MAKING (MDM), ASSESSMENT & PLAN:
         const peLine = `\nPHYSICAL EXAMINATION:\n${structPe || "Well-healed surgical incision without sinus tract or active drainage; range of motion, coronal/sagittal stability, and distal neurovascular status evaluated."}\n`;
         note = `EVALUATION OF THE PAINFUL / FAILED TOTAL JOINT ARTHROPLASTY\nPATIENT: ${ptName} | DEMOGRAPHICS: ${ageGender}\nDATE: ${new Date().toLocaleDateString()}\nATTENDING SURGEON: Dr. Spencer Schulte, MD (Adult Reconstruction)\n\nSUBJECTIVE & INDEX HISTORY:\nEvaluation of painful ${joint}. Course: ${pfi}.\n${clinicalNarrative ? `Clinical History: ${clinicalNarrative}\n` : ""}Instability, startup discomfort, and functional decline evaluated. No acute bacteremia or wound breakdown reported.\n${peLine}\nRADIOGRAPHIC & IMAGING ASSESSMENT:\n${preloadedXray || 'Orthogonal weight-bearing radiographs evaluated for implant fixation, osteolysis, and coronal/sagittal alignment.'}${preloadedOrders ? `\nDay-Of Workup / Orders: ${preloadedOrders}` : ''}\n\nPERIPROSTHETIC JOINT INFECTION (PJI) EXCLUSION WORKUP:\n- Serum Biomarkers: ${labs}\n- Synovial Fluid Aspiration: ${asp}\n- Interpretation: Evaluated per ICM / MSIS diagnostic criteria.\n\nPLAN:\n1. Rule out indolent PJI pending complete synovial cultures.\n2. Surgical reconstruction pathway (isolated liner exchange vs revision arthroplasty) tailored to culture and mechanical findings.\n3. Specific Plan: ${structPlan || instructions}`;
       } else if (type === "postop") {
-        if (!matchedCaseData && ptName && ptName !== "[Patient Name]") {
-          matchedCaseData = findCaseInLocalRegistry(ptName);
-        }
         const procInputVal = document.getElementById("postopIndexProc") ? document.getElementById("postopIndexProc").value.trim() : "";
         const dosInputVal = document.getElementById("postopIndexDos") ? document.getElementById("postopIndexDos").value.trim() : "";
+        // The dictated / entered index procedure always wins over a stale Case DB record for a different joint or side
+        const dictatedIndexProc = (activeStructuredSections && activeStructuredSections.indexProcedure) || procInputVal || localCues.indexProcedure || "";
+        const dictatedIndexDos = (activeStructuredSections && activeStructuredSections.indexSurgeryDate) || "";
+        if (!matchedCaseData && ptName && ptName !== "[Patient Name]") {
+          matchedCaseData = selectCaseMatchingProcedure(findCaseInLocalRegistry(ptName), dictatedIndexProc);
+        }
+        const caseRec = matchedCaseData ? selectCaseMatchingProcedure(matchedCaseData, dictatedIndexProc) : null;
         const rawSurgeonVal = (localCues.indexSurgeon || (document.getElementById("postopIndexSurgeon") ? document.getElementById("postopIndexSurgeon").value.trim() : "")).trim();
         const surgeonSelectVal = /colleague post-op coverage \(dictate/i.test(rawSurgeonVal) ? "" : rawSurgeonVal;
         const isCameronSpeech = /\b(?:dr\.?\s*craig\s+cameron|dr\.?\s*cameron|cameron'?s\s+patient)\b/i.test(combinedRawDictation);
-        const isCameronFollowUp = !matchedCaseData && (isCameronSpeech || /cameron/i.test(surgeonSelectVal));
-        const isSchulteSurgeon = Boolean(matchedCaseData) || (!isCameronFollowUp && (!surgeonSelectVal || /schulte|personal case/i.test(surgeonSelectVal)));
-        const proc = (matchedCaseData ? formatCaseProcedureWithLaterality(matchedCaseData) : "") || localCues.indexProcedure || procInputVal || "Joint Arthroplasty";
-        const dos = (matchedCaseData && matchedCaseData.dos) || localCues.indexDos || dosInputVal || "[DOS]";
-        const implants = (matchedCaseData && matchedCaseData.implants) ? matchedCaseData.implants : "Well-fixed prosthetic components per operative record / radiograph review";
-        const approach = (matchedCaseData && matchedCaseData.approach) ? matchedCaseData.approach : "";
-        const caseComplications = (matchedCaseData && matchedCaseData.complications && !/^none\b/i.test(matchedCaseData.complications)) ? matchedCaseData.complications : "";
+        const isCameronFollowUp = !caseRec && (isCameronSpeech || /cameron/i.test(surgeonSelectVal));
+        const isSchulteSurgeon = Boolean(caseRec) || (!isCameronFollowUp && (!surgeonSelectVal || /schulte|personal case/i.test(surgeonSelectVal)));
+        const proc = dictatedIndexProc || (caseRec ? formatCaseProcedureWithLaterality(caseRec) : "") || "Joint Arthroplasty";
+        const dos = dictatedIndexDos || dosInputVal || (caseRec && caseRec.dos) || localCues.indexDos || "[DOS]";
+        const implants = (caseRec && caseRec.implants) ? caseRec.implants : "Well-fixed prosthetic components per operative record / radiograph review";
+        const approach = (caseRec && caseRec.approach) ? caseRec.approach : "";
+        const caseComplications = (caseRec && caseRec.complications && !/^none\b/i.test(caseRec.complications)) ? caseRec.complications : "";
         const postopTiming = computePostOpIntervalFromDates(dos, currentClinicDate);
         const defaultInterval = postopTiming.intervalOption || (isCameronFollowUp ? "6-Month" : "2-Week");
         const interval = localCues.postopInterval || (document.getElementById("postopInterval") ? document.getElementById("postopInterval").value : defaultInterval);
@@ -7894,7 +8126,7 @@ MEDICAL DECISION MAKING (MDM), ASSESSMENT & PLAN:
           : isCameronFollowUp
           ? " (following for Dr. Craig Cameron, MD — retired April 2026)"
           : ` (following for ${effectiveColleagueSurgeon})`;
-        note = `POST-OPERATIVE CLINICAL SURVEILLANCE NOTE (${interval.toUpperCase()})\nPATIENT: ${ptName} | DEMOGRAPHICS: ${ageGender}\nDATE: ${new Date().toLocaleDateString()}\nATTENDING SURGEON: Dr. Spencer Schulte, MD (Adult Reconstruction)\nHOSPITAL: DDEAMC\n\nINDEX SURGICAL HISTORY:\n${surgeonHistorySentence}${approach ? `\nSurgical Approach: ${approach}.` : ''}\nOperative Implants: ${implants}.${matchedCaseData ? `\nIndex Closure: ${getClosureText()}` : ''}${caseComplications ? `\nCase Log Alert / Intra-Op Note: ${caseComplications}.` : ''}\n\nSUBJECTIVE / INTERVAL HISTORY & RECOVERY:\n${structHpi || clinicalNarrative || 'Patient reports well-managed discomfort, adhering to postoperative mobilization milestones and DVT chemoprophylaxis protocol, and tolerating prescribed physical therapy exercises.'}\n\nPHYSICAL EXAMINATION:\n- Surgical Incision: ${incEx}.\n- Focused Musculoskeletal & ROM Exam: ${romExamLine}\n- Neurovascular & DVT Screen: Calves soft, nontender, negative Homan's. Distal pulses (DP/PT) 2+ and symmetric. Motor and light touch sensation intact distally.\n\nRADIOGRAPHIC ASSESSMENT (PERSONAL REVIEW BY ATTENDING SURGEON):\n${preloadedXray ? `${preloadedXray}. ` : ''}Orthogonal postoperative radiographs personally reviewed by Dr. Spencer Schulte, MD demonstrate anatomical component position, intact bone-implant interface without radiolucencies, and no hardware loosening or subsidence.${preloadedOrders ? `\nDay-Of Imaging / Orders: ${preloadedOrders}` : ''}\n\nASSESSMENT & PLAN:\n1. Status post ${proc}${dos && dos !== '[DOS]' ? ` (${dos})` : ''}${assessmentSurgeonTag} — progressing satisfactorily.\n2. Specific Plan & Precautions: ${structPlan || instructions}\n3. Return precautions (fever, wound drainage, calf swelling, acute pain) reviewed with patient.`;
+        note = `POST-OPERATIVE CLINICAL SURVEILLANCE NOTE (${interval.toUpperCase()})\nPATIENT: ${ptName} | DEMOGRAPHICS: ${ageGender}\nDATE: ${new Date().toLocaleDateString()}\nATTENDING SURGEON: Dr. Spencer Schulte, MD (Adult Reconstruction)\nHOSPITAL: DDEAMC\n\nINDEX SURGICAL HISTORY:\n${surgeonHistorySentence}${approach ? `\nSurgical Approach: ${approach}.` : ''}\nOperative Implants: ${implants}.${caseRec ? `\nIndex Closure: ${getClosureText()}` : ''}${caseComplications ? `\nCase Log Alert / Intra-Op Note: ${caseComplications}.` : ''}\n\nSUBJECTIVE / INTERVAL HISTORY & RECOVERY:\n${structHpi || clinicalNarrative || 'Patient reports well-managed discomfort, adhering to postoperative mobilization milestones and DVT chemoprophylaxis protocol, and tolerating prescribed physical therapy exercises.'}\n\nPHYSICAL EXAMINATION:\n- Surgical Incision: ${incEx}.\n- Focused Musculoskeletal & ROM Exam: ${romExamLine}\n- Neurovascular & DVT Screen: Calves soft, nontender, negative Homan's. Distal pulses (DP/PT) 2+ and symmetric. Motor and light touch sensation intact distally.\n\nRADIOGRAPHIC ASSESSMENT (PERSONAL REVIEW BY ATTENDING SURGEON):\n${preloadedXray ? `${preloadedXray.replace(/\.\s*$/, "")}. ` : ''}Orthogonal postoperative radiographs personally reviewed by Dr. Spencer Schulte, MD demonstrate anatomical component position, intact bone-implant interface without radiolucencies, and no hardware loosening or subsidence.${preloadedOrders ? `\nDay-Of Imaging / Orders: ${preloadedOrders}` : ''}\n\nASSESSMENT & PLAN:\n1. Status post ${proc}${dos && dos !== '[DOS]' ? ` (${dos})` : ''}${assessmentSurgeonTag} — progressing satisfactorily.\n2. Specific Plan & Precautions: ${structPlan || instructions}\n3. Return precautions (fever, wound drainage, calf swelling, acute pain) reviewed with patient.`;
       } else if (type === "sports") {
         const reg = document.getElementById("sportsRegion") ? document.getElementById("sportsRegion").value : "Knee";
         const mech = document.getElementById("sportsMech") ? document.getElementById("sportsMech").value : "Trauma";
@@ -8896,32 +9128,49 @@ POSTOPERATIVE PLAN:
 
       // Append Pre-Op Optimization / Med-Hold Guardrails & In-Clinic Procedure Block (CPT 20610/20611) for Clinic Modules
       if (!type.startsWith("op_") && !type.startsWith("custom_")) {
-        const procType = (document.getElementById("clinicProcType") ? document.getElementById("clinicProcType").value : "none") !== "none"
-          ? document.getElementById("clinicProcType").value
-          : (localCues.clinicProcType || "none");
-        const procDetails = (document.getElementById("clinicProcDetails") ? document.getElementById("clinicProcDetails").value.trim() : "")
-          || "40mg Triamcinolone acetonide (Kenalog) + 4mL 1% Lidocaine + 4mL 0.25% Bupivacaine (Marcaine) administered under strict aseptic technique";
+        const procType = (document.getElementById("clinicProcType") ? document.getElementById("clinicProcType").value : "none") || "none";
+        const rawProcDetails = (document.getElementById("clinicProcDetails") ? document.getElementById("clinicProcDetails").value.trim() : "");
+        const procDetails = rawProcDetails || CLINIC_PROC_DEFAULT_DETAILS[procType] || `${DEFAULT_CORTICOSTEROID_COCKTAIL} administered under strict aseptic technique`;
         const lat = localCues.laterality || (document.getElementById("lat") ? document.getElementById("lat").value : "Right");
-        const jointLabel = localCues.injectionTargetJoint
+        const jointLabel = (document.getElementById("clinicProcJoint") ? document.getElementById("clinicProcJoint").value.trim() : "")
+          || localCues.injectionTargetJoint
           || (type === "new_hip" ? `${lat} Hip` : type === "new_knee" ? `${lat} Knee` : (document.getElementById("jointId") ? document.getElementById("jointId").value : (localCues.indexProcedure || `${lat} Major Joint`)));
 
         if (procType !== "none") {
-          const cptProc = procType === "inj_20611"
-            ? "20611 (Arthrocentesis/Injection Major Joint with Ultrasound/Fluoroscopic Guidance)"
-            : "20610 (Arthrocentesis, Aspiration and/or Injection, Major Joint or Bursa)";
-          note = note.replace(/E\/M Level: 99204 \/ 99214/g, `E/M Level: 99204-25 / 99214-25 (Modifier -25: Significant, Separately Identifiable E/M) | Procedure CPT: ${cptProc}`);
-
-          const procHeader = procType === "asp_pji"
-            ? `IN-CLINIC PROCEDURE NOTE — DIAGNOSTIC JOINT ASPIRATION / ARTHROCENTESIS (CPT ${cptProc})`
-            : `IN-CLINIC PROCEDURE NOTE — INTRA-ARTICULAR JOINT INJECTION (CPT ${cptProc})`;
+          const isGuided = procType === "inj_20611";
+          const isAspiration = procType === "asp_pji";
+          const cptCode = isGuided ? "20611" : "20610";
+          const cptProc = isGuided
+            ? "20611 (Arthrocentesis, aspiration and/or injection, major joint or bursa; WITH ultrasound guidance, with permanent recording and reporting)"
+            : "20610 (Arthrocentesis, aspiration and/or injection, major joint or bursa; without ultrasound guidance)";
+          const procName = isAspiration
+            ? "Diagnostic Joint Aspiration / Arthrocentesis"
+            : procType === "visco_20610"
+            ? "Intra-Articular Viscosupplementation (Hyaluronic Acid) Injection"
+            : isGuided
+            ? "Image-Guided Intra-Articular Corticosteroid Injection"
+            : "Intra-Articular Corticosteroid Injection";
+          const jointLower = jointLabel.toLowerCase();
+          const approachText = isGuided
+            ? `Real-time ultrasound/fluoroscopic guidance used to localize the ${jointLabel} joint space and confirm intra-articular needle placement; permanent image recorded in the chart.`
+            : /knee/.test(jointLower)
+            ? `Landmark-guided superolateral (suprapatellar) approach with the knee in extension.`
+            : /hip/.test(jointLower)
+            ? `Landmark-guided anterior/anterolateral approach to the hip joint.`
+            : /shoulder|glenohumeral|subacromial/.test(jointLower)
+            ? `Landmark-guided posterior approach.`
+            : `Landmark-guided approach using palpable bony anatomy.`;
+          note = note.replace(/E\/M Level: 99204 \/ 99214/g, `E/M Level: 99204-25 / 99214-25 (Modifier -25: Significant, Separately Identifiable E/M) | Procedure CPT: ${cptCode}`);
 
           note += `\n\n============================================================
-${procHeader}
+IN-CLINIC PROCEDURE NOTE (CPT 20610 / 20611)
+- Procedure & CPT Code: ${procName} — CPT ${cptProc}
 - Target Joint & Laterality: ${jointLabel}
-- Informed Consent & Timeout: Risks, benefits, and alternatives (infection, bleeding, transient post-injection flare, neurovascular injury, hyperglycemia) were reviewed; patient provided verbal and written informed consent. Formal procedural timeout verified correct patient, site, and side.
-- Aseptic Preparation & Approach: Skin overlying the ${jointLabel} was widely prepped in sterile fashion with Chlorhexidine Gluconate (ChloraPrep) and allowed to dry. Topical ethyl chloride spray / local skin wheal utilized. Anatomic landmarks${procType === 'inj_20611' ? ' and direct real-time imaging guidance (permanent image recorded in chart)' : ''} were used to enter the joint space atraumaticly.
-- Procedure Details / Injectate / Aspirate: ${procDetails}.
-- Tolerance & Post-Procedure Care: Patient tolerated the procedure well without immediate complication. Sterile dressing applied. Post-procedure icing, activity modification, and infection return precautions reviewed.`;
+- Informed Consent & Time-Out: Risks, benefits, and alternatives (infection, bleeding, post-injection flare, skin depigmentation/fat atrophy, transient hyperglycemia, neurovascular injury) were reviewed; the patient voiced understanding and provided verbal consent. A formal procedural time-out verified correct patient, procedure, site, and laterality.
+- Sterile Preparation & Aseptic Technique: Skin overlying the ${jointLabel} was prepped with Chlorhexidine Gluconate (ChloraPrep) and allowed to dry; strict aseptic no-touch technique maintained throughout. Topical ethyl chloride vapocoolant used for skin anesthesia.
+- Approach / Guidance: ${approachText}
+- ${isAspiration ? "Aspirate Details" : "Injectate Details"}: ${procDetails}.
+- Post-Procedure Tolerance & Neurovascular Check: Patient tolerated the procedure well without immediate complication. Hemostasis achieved and sterile adhesive bandage applied. Distal neurovascular status intact post-procedure (motor, sensation, and capillary refill at baseline). Post-procedure instructions reviewed (ice, relative rest 24–48 hours, monitor blood glucose if diabetic) with return precautions for fever, increasing pain, redness, warmth, or swelling.`;
         }
 
         const bmiVal = document.getElementById("optBmi") ? document.getElementById("optBmi").value : "BMI < 40 (Cleared)";
@@ -8931,7 +9180,8 @@ ${procHeader}
         const glpVal = (document.getElementById("optGlp1") ? document.getElementById("optGlp1").value : "") || localCues.optGlp1 || "None (Not on GLP-1 therapy)";
 
         const hasCustomGuardrail = !bmiVal.includes("< 40") || !a1cVal.includes("< 7.5%") || !nicVal.includes("Non-Smoker") || !acVal.startsWith("None") || !glpVal.startsWith("None");
-        if (type === "new_hip" || type === "new_knee" || type === "painful_joint" || hasCustomGuardrail) {
+        const isArthritisConsult = type === "new_hip" || type === "new_knee";
+        if ((isArthritisConsult && visitDisposition === "surgical_candidate") || type === "painful_joint" || (hasCustomGuardrail && !(isArthritisConsult && visitDisposition === "nonoperative"))) {
           note += `\n\nPREOPERATIVE OPTIMIZATION, RISK STRATIFICATION & MEDICATION HOLD PROTOCOL:
 - BMI / Nutritional Screen: ${bmiVal}
 - Glycemic / HbA1c Screen: ${a1cVal}
