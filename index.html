@@ -2462,8 +2462,11 @@ NOTES:
         procName = "Closed Reduction & Knee-Spanning External Fixation";
         approach = "Percutaneous Multi-Pin External Fixation";
       } else if (type === "op_general_id") {
-        const genTitle = document.getElementById("opGenProcTitle") ? document.getElementById("opGenProcTitle").value : "Irrigation and Excisional Debridement";
-        procName = genTitle;
+        const mode = document.getElementById("opGenMode") ? document.getElementById("opGenMode").value : "I&D Only";
+        procName = mode === "ORIF Only" ? "Open Reduction and Internal Fixation (ORIF)"
+          : mode === "ORIF + I&D" ? "ORIF with Radical Excisional Debridement"
+          : mode === "HWR + I&D" ? "Removal of Deep Hardware with Radical Debridement"
+          : "Irrigation and Excisional Debridement";
         approach = document.getElementById("opGenApproach") ? document.getElementById("opGenApproach").value : "Direct Surgical Exposure";
       } else if (type === "op_lat_plateau") {
         procName = "Lateral Tibial Plateau ORIF";
@@ -2535,6 +2538,7 @@ NOTES:
         renderRegistryModalList();
       }
     }
+    const toggleCaseDbModal = toggleRegistryModal;
 
     function editCaseComplication(caseId) {
       const cases = getSurgicalCases();
@@ -4474,7 +4478,7 @@ ${enc.planSummary || 'Standard orthopedic management and follow-up protocol.'}`;
             <div class="flex flex-wrap items-center gap-1">
               ${dateJumpButtons}
               <button type="button" onclick="syncAllSavedClinicDatesWithCaseDB(true)" class="px-2 py-0.5 rounded bg-emerald-700/40 hover:bg-emerald-700/60 border border-emerald-500/50 text-[10px] font-semibold text-emerald-200">🔄 Re-Sync All Dates</button>
-              <button type="button" onclick="toggleCaseDbModal()" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 border border-slate-600 text-[10px] font-semibold text-slate-200">🗄️ Open Case DB</button>
+              <button type="button" onclick="toggleRegistryModal()" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 border border-slate-600 text-[10px] font-semibold text-slate-200">🗄️ Open Case DB</button>
             </div>
           </div>`;
 
@@ -8150,13 +8154,11 @@ ${kneePlanSection}`;
         const ebl = document.getElementById("opEbl") ? document.getElementById("opEbl").value : "100 cc";
         const manualImplantsVal = document.getElementById("opImplants") ? document.getElementById("opImplants").value.trim() : "";
         const hasCustomManualImplants = manualImplantsVal && manualImplantsVal !== "G7 OsseoTi Cup, E1 Liner, Biolox Delta Head";
-        const closureProfile = document.getElementById("closureSelect") ? document.getElementById("closureSelect").value : "tha_bikini";
-
         const incisionParagraph = da.isBikini
           ? `An oblique inguinal skin-crease ("bikini") incision was made centered approximately 2 fingerbreadths distal and lateral to the ${da.latLower} anterior superior iliac spine (ASIS), oriented parallel to Langer's lines within the natural flexion crease. Dissection was carried sharply through the subcutaneous tissue to the fascia overlying the tensor fascia lata (TFL) muscle belly.`
           : `A standard longitudinal Direct Anterior skin incision was made initiating approximately 2 cm distal and 2 cm lateral to the ${da.latLower} anterior superior iliac spine (ASIS) and extending distally in line with the belly of the tensor fascia lata (TFL). Dissection was carried sharply through the subcutaneous tissue to the translucent TFL fascia.`;
 
-        const closureSection = (closureProfile && closureProfile !== "tha_bikini" && closureProfile !== "tha_standard")
+        const closureSection = (currentClosure && currentClosure !== "default")
           ? getClosureText()
           : da.isBikini
           ? `The wound was copiously irrigated with sterile normal saline and dilute betadine lavage. The deep arthrotomy and tensor fascia lata (TFL) fascia were reapproximated seamlessly with a running #1 Quill barbed absorbable suture. The deep dermal and subcutaneous layer was closed with a 0 Stratafix absorbable suture to eliminate dead space and tension. The subcuticular skin layer was closed in a running cosmetic fashion using a 3-0 Stratafix knotless barbed suture, reinforced externally with a Sylke silver-impregnated surgical wound dressing and a sterile compressive dressing.`
