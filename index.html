@@ -1771,7 +1771,8 @@ NOTES:
     ]);
 
     const CANONICAL_FIRST_NAMES = {
-      bob: "robert", rob: "robert", robbie: "robert",obby: "robert",
+      jackie: "jacquelyn", jacqueline: "jacquelyn", jaclyn: "jacquelyn",
+      bob: "robert", rob: "robert", robbie: "robert", bobby: "robert",
       bill: "william", billy: "william", will: "william", willy: "william", liam: "william",
       mike: "michael", mickey: "michael", mick: "michael",
       jim: "james", jimmy: "james", jamie: "james",
@@ -1847,6 +1848,7 @@ NOTES:
     function normalizeNameTokens(str) {
       return String(str || "")
         .toLowerCase()
+        .replace(/['']/g, "")
         .replace(/\([^)]*\)/g, " ")
         .replace(/\[[^\]]*\]/g, " ")
         .replace(/\b\d+\s*(?:m|f|yo|y\/o|wk|wks|mo|yr)?\b/g, " ")
@@ -2020,13 +2022,10 @@ NOTES:
       };
     }
 
-    // Extract any explicitly dictated operating surgeon from speech/text (e.g. "following for Dr. Cameron", "s/p TKA by Dr. Hubler", "Dr. Miller's patient")
+    // Extract any explicitly dictated operating surgeon from speech/text (e.g. "s/p TKA by Dr. Hubler", "Dr. Miller's patient", "following for Dr. Smith")
     function extractSpokenSurgeonFromDictation(text) {
       const s = String(text || "").trim();
       if (!s) return "";
-      if (/\b(?:dr\.?\s*craig\s+cameron|dr\.?\s*cameron|cameron'?s\s+patient|following\s+for\s+cameron)\b/i.test(s)) {
-        return "Dr. Craig Cameron, MD (Retired April 2026 — ≥6M Post-Op Surveillance)";
-      }
       const explicitColleagueMatch = s.match(/\b(?:performed\s+by|surgery\s+by|following\s+(?:up\s+)?for|post[- ]?op\s+for|covering\s+for|surgeon\s+was)\s+(dr\.?\s+[a-z][a-z'-]+(?:\s+[a-z][a-z'-]+)?)/i)
         || s.match(/\b(dr\.?\s+[a-z][a-z'-]+)'?s\s+(?:post[- ]?op|patient|follow[- ]?up|case)\b/i);
       if (explicitColleagueMatch) {
@@ -2039,50 +2038,29 @@ NOTES:
       return "";
     }
 
-    // Attribute post-op visits on Dr. Schulte's clinic schedule to Dr. Spencer Schulte, MD by default unless Dr. Cameron (DOS <= Apr 2026 or explicitly named) or another colleague is explicitly specified
+    // Attribute post-op visits on Dr. Schulte's clinic schedule to Dr. Spencer Schulte, MD by default unless an explicit colleague is dictated in speech
     function classifyUnmatchedPostOpAttribution(enc, clinicDateStr) {
-      const rawSurgeonField = (enc.formValues && enc.formValues.postopIndexSurgeon) || "";
-      const cleanSurgeonField = /colleague post-op coverage \(dictate/i.test(rawSurgeonField) ? "" : rawSurgeonField;
-      const combinedText = `${enc.planSummary || ""} ${enc.preVisitScreening || ""} ${enc.dictation || ""} ${cleanSurgeonField}`;
-      const spokenSurgeon = extractSpokenSurgeonFromDictation(combinedText);
+      const spokenSourceText = `${enc.dictation || ""} ${enc.preVisitScreening || ""}`;
+      const spokenSurgeon = extractSpokenSurgeonFromDictation(spokenSourceText);
       if (spokenSurgeon) {
-        const isCameron = /cameron/i.test(spokenSurgeon);
         return {
           surgeon: spokenSurgeon,
-          isCameron,
           isSchulte: false,
-          defaultInterval: isCameron ? "6-Month" : null,
-          badgeText: isCameron
-            ? "🤝 Post-Op Continuity: Following for Dr. Craig Cameron, MD (Retired Apr 2026 · ≥6M Out)"
-            : `🤝 Colleague Post-Op: ${spokenSurgeon}`
-        };
-      }
-
-      const dosStr = (enc.formValues && enc.formValues.postopIndexDos) || "";
-      const dosTs = parseFlexibleDateToTimestamp(dosStr, 2026);
-      const cameronRetirementCutoffTs = new Date(2026, 3, 30, 23, 59, 59).getTime(); // April 30, 2026
-
-      // Only attribute to Dr. Craig Cameron if DOS is explicitly on/before April 30, 2026
-      if (dosTs > 0 && dosTs <= cameronRetirementCutoffTs) {
-        return {
-          surgeon: "Dr. Craig Cameron, MD (Retired April 2026 — ≥6M Post-Op Surveillance)",
-          isCameron: true,
-          isSchulte: false,
-          defaultInterval: /\b(?:1[- ]?yr|1[- ]?year|annual)\b/i.test(combinedText) ? "1-Year" : "6-Month",
-          badgeText: "🤝 Post-Op Continuity: Following for Dr. Craig Cameron, MD (Retired Apr 2026 · ~6+ Mo Out)"
+          defaultInterval: null,
+          badgeText: `🤝 Colleague Post-Op: ${spokenSurgeon}`
         };
       }
 
       // Default for all post-op visits on Dr. Schulte's schedule: performed by Dr. Spencer Schulte, MD
       let inferredInterval = "2-Week";
-      if (/\b(?:1[- ]?yr|1[- ]?year|annual|12[- ]?mo)\b/i.test(combinedText)) inferredInterval = "1-Year";
-      else if (/\b(?:6[- ]?mo|6[- ]?month)\b/i.test(combinedText)) inferredInterval = "6-Month";
-      else if (/\b(?:12[- ]?wk|12[- ]?week|3[- ]?mo|3[- ]?month)\b/i.test(combinedText)) inferredInterval = "12-Week";
-      else if (/\b(?:6[- ]?wk|6[- ]?week|4[- ]?wk|4[- ]?week)\b/i.test(combinedText)) inferredInterval = "6-Week";
+      const timingText = `${enc.planSummary || ""} ${enc.dictation || ""} ${(enc.formValues && enc.formValues.postopInterval) || ""}`;
+      if (/\b(?:1[- ]?yr|1[- ]?year|annual|12[- ]?mo)\b/i.test(timingText)) inferredInterval = "1-Year";
+      else if (/\b(?:6[- ]?mo|6[- ]?month)\b/i.test(timingText)) inferredInterval = "6-Month";
+      else if (/\b(?:12[- ]?wk|12[- ]?week|3[- ]?mo|3[- ]?month)\b/i.test(timingText)) inferredInterval = "12-Week";
+      else if (/\b(?:6[- ]?wk|6[- ]?week|4[- ]?wk|4[- ]?week)\b/i.test(timingText)) inferredInterval = "6-Week";
 
       return {
         surgeon: "Dr. Spencer Schulte, MD (Personal Case Log)",
-        isCameron: false,
         isSchulte: true,
         defaultInterval: inferredInterval,
         badgeText: `🦾 Dr. Spencer Schulte, MD Post-Op (${inferredInterval} Follow-Up)`
@@ -2195,7 +2173,7 @@ NOTES:
         changed = true;
       }
 
-      if (changed || (enc.assembledNote && /colleague|following for dr\. craig cameron/i.test(enc.assembledNote))) {
+      if (changed || (enc.assembledNote && /colleague|cameron/i.test(enc.assembledNote))) {
         enc.assembledNote = "";
         changed = true;
       }
@@ -2217,27 +2195,32 @@ NOTES:
       encounters.forEach(enc => {
         if (!enc || !enc.name) return;
 
-        // Scrub any legacy "Colleague Post-Op Coverage (Dictate Operating Surgeon)" pollution from prior sessions
-        if (enc.assumedCareColleague && /colleague post-op coverage \(dictate/i.test(enc.assumedCareColleague)) {
+        // Scrub any legacy colleague coverage or outdated attribution pollution from prior sessions
+        if (enc.assumedCareColleague && /colleague post-op coverage|cameron/i.test(enc.assumedCareColleague)) {
           delete enc.assumedCareColleague;
           anyUpdated = true;
         }
-        if (enc.assumedCareBadge && /dictate colleague surgeon/i.test(enc.assumedCareBadge)) {
+        if (enc.assumedCareBadge && /dictate colleague surgeon|cameron/i.test(enc.assumedCareBadge)) {
           delete enc.assumedCareBadge;
           anyUpdated = true;
         }
-        if (enc.formValues && enc.formValues.postopIndexSurgeon && /colleague post-op coverage \(dictate/i.test(enc.formValues.postopIndexSurgeon)) {
+        if (enc.formValues && enc.formValues.postopIndexSurgeon && /colleague post-op coverage|cameron/i.test(enc.formValues.postopIndexSurgeon)) {
           enc.formValues.postopIndexSurgeon = "Dr. Spencer Schulte, MD (Personal Case Log)";
           enc.assembledNote = "";
           anyUpdated = true;
         }
-        if (enc.assembledNote && /colleague post-op coverage \(dictate/i.test(enc.assembledNote)) {
+        if (enc.assembledNote && /colleague post-op coverage|cameron/i.test(enc.assembledNote)) {
           enc.assembledNote = "";
           anyUpdated = true;
         }
+        if (enc.planSummary && /cameron/i.test(enc.planSummary)) {
+          enc.planSummary = enc.planSummary.replace(/\(?following for dr\.?\s*(?:craig\s+)?cameron[^)]*\)?/gi, "").trim();
+          anyUpdated = true;
+        }
 
+        const rawFoundCase = findCaseInLocalRegistry(enc.name);
         const encDictatedIndexProc = (enc.structuredSections && enc.structuredSections.indexProcedure) || "";
-        const foundCase = selectCaseMatchingProcedure(findCaseInLocalRegistry(enc.name) || enc.matchedCaseData || null, encDictatedIndexProc);
+        const foundCase = selectCaseMatchingProcedure(rawFoundCase || enc.matchedCaseData || null, encDictatedIndexProc) || rawFoundCase;
         if (!foundCase && enc.matchedCaseData) {
           // Stale Case DB record conflicts with the dictated index procedure (e.g. Case DB TKA vs dictated THA) — drop it
           enc.matchedCaseData = null;
@@ -2256,7 +2239,12 @@ NOTES:
             anyUpdated = true;
           }
           const attr = classifyUnmatchedPostOpAttribution(enc, targetDate);
-          if (enc.assumedCareColleague !== attr.surgeon) {
+          if (attr.isSchulte) {
+            if (enc.assumedCareColleague) {
+              delete enc.assumedCareColleague;
+              anyUpdated = true;
+            }
+          } else if (enc.assumedCareColleague !== attr.surgeon) {
             enc.assumedCareColleague = attr.surgeon;
             anyUpdated = true;
           }
@@ -2301,6 +2289,7 @@ NOTES:
       const dateSet = new Set();
       if (typeof currentClinicDate === "string" && currentClinicDate) dateSet.add(currentClinicDate);
       dateSet.add("2026-11-17");
+      dateSet.add("2026-11-19");
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i) || "";
         if (k.startsWith("orthoflow_encounters_")) {
@@ -4256,13 +4245,24 @@ NOTES:
       const enc = encounters.find(e => e.id === encounterId);
       if (!enc) return;
 
-      // Cross-reference Case DB live and enrich encounter with any newly matched surgical details (skipping Case DB records whose joint conflicts with the dictated index procedure)
+      // Cross-reference Case DB live and enrich encounter with any newly matched surgical details
+      const rawRegMatch = findCaseInLocalRegistry(enc.name);
       const encDictatedProc = (enc.structuredSections && enc.structuredSections.indexProcedure) || "";
-      const liveMatch = selectCaseMatchingProcedure(findCaseInLocalRegistry(enc.name) || enc.matchedCaseData || null, encDictatedProc);
+      const liveMatch = selectCaseMatchingProcedure(rawRegMatch || enc.matchedCaseData || null, encDictatedProc) || rawRegMatch;
       if (liveMatch) {
         const wasEnriched = enrichEncounterWithCaseMatch(enc, liveMatch, currentClinicDate);
         if (wasEnriched) {
           safeSetLocalStorage(`orthoflow_encounters_${currentClinicDate}`, JSON.stringify(encounters));
+        }
+      } else if (enc.moduleVal === "postop") {
+        // Unmatched post-op on Dr. Schulte's schedule: scrub any legacy colleague or stale attribution unless explicitly spoken in dictation
+        const hasColleagueSpeech = Boolean(extractSpokenSurgeonFromDictation(`${enc.dictation || ""} ${enc.preVisitScreening || ""}`));
+        if (!hasColleagueSpeech) {
+          if (enc.assumedCareColleague) delete enc.assumedCareColleague;
+          if (enc.assumedCareBadge && /colleague|cameron/i.test(enc.assumedCareBadge)) delete enc.assumedCareBadge;
+          if (enc.formValues && enc.formValues.postopIndexSurgeon && /colleague|cameron/i.test(enc.formValues.postopIndexSurgeon)) {
+            enc.formValues.postopIndexSurgeon = "Dr. Spencer Schulte, MD (Personal Case Log)";
+          }
         }
       }
 
@@ -4367,11 +4367,12 @@ NOTES:
         const timing = computePostOpIntervalFromDates(dos, currentClinicDate);
         const attr = !caseMatch ? classifyUnmatchedPostOpAttribution(enc, currentClinicDate) : null;
         const interval = (enc.formValues && enc.formValues.postopInterval) || localCues.postopInterval || (attr && attr.defaultInterval) || timing.intervalOption || "2-Week";
+        const spokenSurgeon = extractSpokenSurgeonFromDictation(`${enc.dictation || ""} ${enc.preVisitScreening || ""}`);
         const rawSavedSurgeon = (enc.formValues && enc.formValues.postopIndexSurgeon) || "";
-        const cleanSavedSurgeon = /colleague post-op coverage \(dictate/i.test(rawSavedSurgeon) ? "" : rawSavedSurgeon;
+        const cleanSavedSurgeon = /colleague post-op coverage|cameron/i.test(rawSavedSurgeon) ? "" : rawSavedSurgeon;
         const indexSurgeonLine = caseMatch
           ? `Dr. Spencer Schulte, MD (Personal Surgical Case DB)`
-          : (localCues.indexSurgeon || cleanSavedSurgeon || (attr && attr.surgeon) || "Dr. Spencer Schulte, MD (Personal Case Log)");
+          : (spokenSurgeon || cleanSavedSurgeon || (attr && attr.surgeon) || "Dr. Spencer Schulte, MD (Personal Case Log)");
         const implants = (caseMatch && caseMatch.implants) || "Well-fixed prosthetic components per operative record / radiograph review";
         const approach = (caseMatch && caseMatch.approach) || "Standard";
         const closureStr = (caseMatch && caseMatch.closure) || "Standard layered closure";
@@ -4456,7 +4457,7 @@ ${enc.planSummary || 'Standard orthopedic management and follow-up protocol.'}`;
         headerBtn.innerText = `📤 Export All Remaining (${remainingList.length})`;
       }
 
-      // Render Case DB Post-Op Cross-Reference & Dr. Cameron Continuity Audit Banner
+      // Render Case DB Post-Op Cross-Reference Audit Banner
       const auditBanner = document.getElementById("caseDbAuditBanner");
       if (auditBanner) {
         const otherSavedDates = getSavedClinicDates().filter(d => d.date !== currentClinicDate);
@@ -4498,7 +4499,7 @@ ${enc.planSummary || 'Standard orthopedic management and follow-up protocol.'}`;
           if (unmatchedPostOps.length > 0) {
             bannerHtml += `<div class="mt-1.5 pt-1.5 border-t border-emerald-800/40 space-y-1">` + unmatchedPostOps.map(enc => {
               const attr = classifyUnmatchedPostOpAttribution(enc, currentClinicDate);
-              const tagLabel = attr.isSchulte ? "Dr. Schulte Post-Op →" : attr.isCameron ? "Dr. Cameron (≥6M) →" : "Colleague Post-Op →";
+              const tagLabel = attr.isSchulte ? "Dr. Schulte Post-Op →" : "Colleague Post-Op →";
               return `<div onclick="loadEncounterIntoWorkspace('${escapeHtml(enc.id)}')" class="cursor-pointer px-2 py-1 rounded-lg bg-sky-950/50 border border-sky-500/40 hover:border-sky-400 flex flex-wrap items-center justify-between gap-1 text-[10px]">
                 <div>
                   <span class="font-bold text-sky-200">${attr.isSchulte ? '🦾' : '🤝'} ${escapeHtml(enc.name)}</span>
@@ -6779,10 +6780,9 @@ ${cleanTranscript}
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Index Operating Surgeon (Dictate or Select)</label>
-              <input id="postopIndexSurgeon" list="postopSurgeonOptions" oninput="assembleNote()" type="text" value="${escapeHtml(defaultSurgeon)}" placeholder="Dictate surgeon (e.g. Dr. Cameron, Dr. Hubler)" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <input id="postopIndexSurgeon" list="postopSurgeonOptions" oninput="assembleNote()" type="text" value="${escapeHtml(defaultSurgeon)}" placeholder="Dictate colleague surgeon (or leave default)" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
               <datalist id="postopSurgeonOptions">
                 <option value="Dr. Spencer Schulte, MD (Personal Case Log)"></option>
-                <option value="Dr. Craig Cameron, MD (Retired April 2026 — ≥6M Post-Op Surveillance)"></option>
                 <option value="Colleague Post-Op Coverage (DDEAMC Orthopedics)"></option>
                 <option value="Outside / Referring Surgeon (Assuming Post-Op Care)"></option>
               </datalist>
@@ -8092,39 +8092,34 @@ ${kneePlanSection}`;
       } else if (type === "postop") {
         const procInputVal = document.getElementById("postopIndexProc") ? document.getElementById("postopIndexProc").value.trim() : "";
         const dosInputVal = document.getElementById("postopIndexDos") ? document.getElementById("postopIndexDos").value.trim() : "";
-        // The dictated / entered index procedure always wins over a stale Case DB record for a different joint or side
-        const dictatedIndexProc = (activeStructuredSections && activeStructuredSections.indexProcedure) || procInputVal || localCues.indexProcedure || "";
+        const dictatedIndexProc = (activeStructuredSections && activeStructuredSections.indexProcedure) || "";
         const dictatedIndexDos = (activeStructuredSections && activeStructuredSections.indexSurgeryDate) || "";
-        if (!matchedCaseData && ptName && ptName !== "[Patient Name]") {
-          matchedCaseData = selectCaseMatchingProcedure(findCaseInLocalRegistry(ptName), dictatedIndexProc);
+        const registryCase = (ptName && ptName !== "[Patient Name]") ? findCaseInLocalRegistry(ptName) : null;
+        if (!matchedCaseData && registryCase) {
+          matchedCaseData = selectCaseMatchingProcedure(registryCase, dictatedIndexProc) || registryCase;
         }
-        const caseRec = matchedCaseData ? selectCaseMatchingProcedure(matchedCaseData, dictatedIndexProc) : null;
+        const caseRec = matchedCaseData ? (selectCaseMatchingProcedure(matchedCaseData, dictatedIndexProc) || matchedCaseData) : null;
         const rawSurgeonVal = (localCues.indexSurgeon || (document.getElementById("postopIndexSurgeon") ? document.getElementById("postopIndexSurgeon").value.trim() : "")).trim();
         const surgeonSelectVal = /colleague post-op coverage \(dictate/i.test(rawSurgeonVal) ? "" : rawSurgeonVal;
-        const isCameronSpeech = /\b(?:dr\.?\s*craig\s+cameron|dr\.?\s*cameron|cameron'?s\s+patient)\b/i.test(combinedRawDictation);
-        const isCameronFollowUp = !caseRec && (isCameronSpeech || /cameron/i.test(surgeonSelectVal));
-        const isSchulteSurgeon = Boolean(caseRec) || (!isCameronFollowUp && (!surgeonSelectVal || /schulte|personal case/i.test(surgeonSelectVal)));
-        const proc = dictatedIndexProc || (caseRec ? formatCaseProcedureWithLaterality(caseRec) : "") || "Joint Arthroplasty";
-        const dos = dictatedIndexDos || dosInputVal || (caseRec && caseRec.dos) || localCues.indexDos || "[DOS]";
+        const isExplicitColleague = Boolean(surgeonSelectVal) && !/schulte|personal case/i.test(surgeonSelectVal) && /dr\./i.test(surgeonSelectVal);
+        const isSchulteSurgeon = !isExplicitColleague;
+        const proc = dictatedIndexProc || (caseRec ? formatCaseProcedureWithLaterality(caseRec) : "") || procInputVal || localCues.indexProcedure || "Joint Arthroplasty";
+        const dos = dictatedIndexDos || (caseRec && caseRec.dos) || dosInputVal || localCues.indexDos || "[DOS]";
         const implants = (caseRec && caseRec.implants) ? caseRec.implants : "Well-fixed prosthetic components per operative record / radiograph review";
         const approach = (caseRec && caseRec.approach) ? caseRec.approach : "";
         const caseComplications = (caseRec && caseRec.complications && !/^none\b/i.test(caseRec.complications)) ? caseRec.complications : "";
         const postopTiming = computePostOpIntervalFromDates(dos, currentClinicDate);
-        const defaultInterval = postopTiming.intervalOption || (isCameronFollowUp ? "6-Month" : "2-Week");
+        const defaultInterval = postopTiming.intervalOption || "2-Week";
         const interval = localCues.postopInterval || (document.getElementById("postopInterval") ? document.getElementById("postopInterval").value : defaultInterval);
         const incEx = localCues.incisionExam || (document.getElementById("postopIncision") ? document.getElementById("postopIncision").value : "Clean, dry, intact; no erythema or drainage");
         const romInputVal = document.getElementById("postopRomExam") ? document.getElementById("postopRomExam").value.trim() : "";
         const romExamLine = structPe || (localCues.kneeROM ? `Range of motion ${localCues.kneeROM}; progressing satisfactorily without guarded motion block.` : (romInputVal || "Progressing satisfactorily without guarded motion block."));
-        const effectiveColleagueSurgeon = localCues.indexSurgeon || surgeonSelectVal || "Dr. Spencer Schulte, MD";
+        const effectiveColleagueSurgeon = isExplicitColleague ? (localCues.indexSurgeon || surgeonSelectVal) : "Dr. Spencer Schulte, MD";
         const surgeonHistorySentence = isSchulteSurgeon
           ? `Patient presents for scheduled ${interval}${postopTiming.daysPostOp !== null ? ` (${postopTiming.label})` : ''} evaluation s/p ${proc}${dos && dos !== '[DOS]' ? ` performed on ${dos}` : ''} by Dr. Spencer Schulte, MD.`
-          : isCameronFollowUp
-          ? `Patient presents for scheduled ${interval}${dos && dos !== '[DOS]' ? ` (${postopTiming.label})` : ' (~6+ months post-op)'} evaluation s/p ${proc}${dos && dos !== '[DOS]' ? ` performed on ${dos}` : ' (prior to May 2026)'} by Dr. Craig Cameron, MD (assuming ongoing postoperative orthopedic surveillance following Dr. Cameron's April 2026 retirement).`
           : `Patient presents for scheduled ${interval}${dos && dos !== '[DOS]' ? ` (${postopTiming.label})` : ''} evaluation s/p ${proc}${dos && dos !== '[DOS]' ? ` performed on ${dos}` : ''} by ${effectiveColleagueSurgeon}.`;
         const assessmentSurgeonTag = isSchulteSurgeon
           ? ""
-          : isCameronFollowUp
-          ? " (following for Dr. Craig Cameron, MD — retired April 2026)"
           : ` (following for ${effectiveColleagueSurgeon})`;
         note = `POST-OPERATIVE CLINICAL SURVEILLANCE NOTE (${interval.toUpperCase()})\nPATIENT: ${ptName} | DEMOGRAPHICS: ${ageGender}\nDATE: ${new Date().toLocaleDateString()}\nATTENDING SURGEON: Dr. Spencer Schulte, MD (Adult Reconstruction)\nHOSPITAL: DDEAMC\n\nINDEX SURGICAL HISTORY:\n${surgeonHistorySentence}${approach ? `\nSurgical Approach: ${approach}.` : ''}\nOperative Implants: ${implants}.${caseRec ? `\nIndex Closure: ${getClosureText()}` : ''}${caseComplications ? `\nCase Log Alert / Intra-Op Note: ${caseComplications}.` : ''}\n\nSUBJECTIVE / INTERVAL HISTORY & RECOVERY:\n${structHpi || clinicalNarrative || 'Patient reports well-managed discomfort, adhering to postoperative mobilization milestones and DVT chemoprophylaxis protocol, and tolerating prescribed physical therapy exercises.'}\n\nPHYSICAL EXAMINATION:\n- Surgical Incision: ${incEx}.\n- Focused Musculoskeletal & ROM Exam: ${romExamLine}\n- Neurovascular & DVT Screen: Calves soft, nontender, negative Homan's. Distal pulses (DP/PT) 2+ and symmetric. Motor and light touch sensation intact distally.\n\nRADIOGRAPHIC ASSESSMENT (PERSONAL REVIEW BY ATTENDING SURGEON):\n${preloadedXray ? `${preloadedXray.replace(/\.\s*$/, "")}. ` : ''}Orthogonal postoperative radiographs personally reviewed by Dr. Spencer Schulte, MD demonstrate anatomical component position, intact bone-implant interface without radiolucencies, and no hardware loosening or subsidence.${preloadedOrders ? `\nDay-Of Imaging / Orders: ${preloadedOrders}` : ''}\n\nASSESSMENT & PLAN:\n1. Status post ${proc}${dos && dos !== '[DOS]' ? ` (${dos})` : ''}${assessmentSurgeonTag} — progressing satisfactorily.\n2. Specific Plan & Precautions: ${structPlan || instructions}\n3. Return precautions (fever, wound drainage, calf swelling, acute pain) reviewed with patient.`;
       } else if (type === "sports") {
