@@ -373,6 +373,46 @@
 
       <textarea id="noteOutput" oninput="onManualNoteEdit()" rows="11" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-slate-200 font-mono leading-relaxed focus:outline-none no-scrollbar"></textarea>
 
+      <!-- One-Tap Smart Edits & Refine Bar (Doximity-Style Quick In-Place Note Modification) -->
+      <div id="noteRefineBar" class="bg-slate-950/80 border border-slate-800/80 rounded-xl p-2.5 flex flex-col gap-2 mt-0.5">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-1.5">
+            <span class="text-[11px] font-bold text-sky-400">⚡ Smart Refine &amp; Edits</span>
+            <span class="text-[10px] text-slate-500 hidden sm:inline">• 1-Tap Edits or Custom Voice Prompt</span>
+          </div>
+          <span id="refineStatusSpinner" class="hidden text-[10px] font-semibold text-amber-300 animate-pulse">Refining note in-place...</span>
+        </div>
+
+        <!-- Quick Refinement Chips -->
+        <div class="flex flex-wrap items-center gap-1.5">
+          <button type="button" onclick="applyNoteRefinement('Make the note more concise and brief while preserving all critical clinical details, physical exam findings, and plan points.')" class="px-2.5 py-1 rounded-lg bg-slate-800/90 hover:bg-slate-700 border border-slate-700 text-[11px] font-medium text-slate-200 transition-colors">
+            ✂️ More Concise
+          </button>
+          <button type="button" onclick="applyNoteRefinement('Convert the Assessment & Plan to a conservative non-operative management plan (physical therapy, NSAIDs, activity modification, weight loss, deferring surgery) and remove any surgical arthroplasty indication or pre-op clearance workup.')" class="px-2.5 py-1 rounded-lg bg-slate-800/90 hover:bg-slate-700 border border-slate-700 text-[11px] font-medium text-slate-200 transition-colors">
+            🛡️ Convert to Non-Op Plan
+          </button>
+          <button type="button" onclick="applyNoteRefinement('Append a formal In-Clinic Procedure Note for CPT 20610 (Intra-Articular Joint Injection with 40mg Kenalog + 4mL 1% Lidocaine + 4mL 0.25% Marcaine) performed today under strict sterile ChloraPrep prep and aseptic technique without complication.')" class="px-2.5 py-1 rounded-lg bg-slate-800/90 hover:bg-slate-700 border border-slate-700 text-[11px] font-medium text-slate-200 transition-colors">
+            💉 Add CPT 20610 Injection Note
+          </button>
+          <button type="button" onclick="applyNoteRefinement('Add full orthopaedic billing codes at the end of the note, including relevant ICD-10 diagnosis codes, CPT procedure and E&M codes with modifiers (e.g. -25 if injection performed), and medical decision making complexity level.')" class="px-2.5 py-1 rounded-lg bg-slate-800/90 hover:bg-slate-700 border border-slate-700 text-[11px] font-medium text-slate-200 transition-colors">
+            🏷️ Add Billing Codes
+          </button>
+        </div>
+
+        <!-- Refine Note Input + Mic + Submit Button -->
+        <div class="flex items-center gap-1.5">
+          <div class="relative flex-1">
+            <input type="text" id="refineNoteInput" onkeydown="if(event.key==='Enter') submitCustomNoteRefinement()" placeholder="Instruct AI (e.g. 'Add that we reviewed MRI', 'Change knee to left side', 'Shorten HPI')..." class="w-full bg-slate-900 border border-slate-800 rounded-xl pl-3 pr-8 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-500">
+            <button type="button" onclick="toggleRefineMic()" id="refineMicBtn" title="Dictate instruction" class="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-1">
+              🎤
+            </button>
+          </div>
+          <button type="button" onclick="submitCustomNoteRefinement()" id="refineSubmitBtn" class="px-3 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-500 active:bg-sky-700 text-xs font-semibold text-white border border-sky-400/40 shrink-0">
+            Refine ⚡
+          </button>
+        </div>
+      </div>
+
       <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-1">
         <button onclick="copyNote()" id="copyBtn" class="py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-xs font-semibold text-white active:bg-slate-700">
           Copy Note
@@ -5174,7 +5214,7 @@ Extract and return ONLY valid JSON matching:
         document.getElementById("opAbnormalities").value = activeStructuredSections.operative_details;
       }
 
-      let resolvedOneLiner = parsed.one_liner_summary || parsed.postOpInstructions || activeStructuredSections.assessment_and_plan || localCues.oneLinerSummary || "";
+      let resolvedOneLiner = parsed.oneLinerSummary || parsed.one_liner_summary || parsed.postOpInstructions || activeStructuredSections.assessment_and_plan || localCues.oneLinerSummary || "";
       if (localCues.weightBearing && !resolvedOneLiner.toLowerCase().includes("weight bearing") && !resolvedOneLiner.toLowerCase().includes("wbat")) {
         resolvedOneLiner = resolvedOneLiner ? `${resolvedOneLiner} | ${localCues.weightBearing}` : localCues.weightBearing;
       }
@@ -5197,7 +5237,9 @@ Extract and return ONLY valid JSON matching:
       }
 
       // Flip stage from Pre-Visit to In-Clinic if physician is dictating active clinical exam/procedure/sign-up
-      const wlSignup = (parsed.waitlist_signup && typeof parsed.waitlist_signup === "object")
+      const wlSignup = (parsed.waitlistSignup && typeof parsed.waitlistSignup === "object")
+        ? parsed.waitlistSignup
+        : (parsed.waitlist_signup && typeof parsed.waitlist_signup === "object")
         ? parsed.waitlist_signup
         : (localCues.waitlist_signup && typeof localCues.waitlist_signup === "object")
         ? localCues.waitlist_signup
@@ -5266,9 +5308,35 @@ Extract and return ONLY valid JSON matching:
         wlAlert.classList.add("hidden");
       }
 
-      setManualNoteEditLock(false);
-      autoSaveCurrentEncounter();
-      assembleNote(true);
+      // Whole-Note Synthesis Check: If AI generated the full clinical note, write directly and lock to avoid clobbering
+      if (parsed.finalClinicalNote && String(parsed.finalClinicalNote).trim()) {
+        const finalNote = String(parsed.finalClinicalNote).trim();
+        const noteBox = document.getElementById("noteOutput");
+        if (noteBox) {
+          noteBox.value = finalNote;
+        }
+        setManualNoteEditLock(true);
+        const lockBadge = document.getElementById("manualEditLockBadge");
+        if (lockBadge) {
+          lockBadge.innerText = "✨ AI Whole Note Synced";
+          lockBadge.className = "text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-950/70 border border-emerald-500/50 text-emerald-300";
+          lockBadge.classList.remove("hidden");
+        }
+        if (activeEncounterId) {
+          const encounters = getClinicEncounters(currentClinicDate);
+          const enc = encounters.find(e => e.id === activeEncounterId);
+          if (enc) {
+            enc.assembledNote = finalNote;
+            safeSetLocalStorage(`orthoflow_encounters_${currentClinicDate}`, JSON.stringify(encounters));
+          }
+        }
+        renderExtractedCuesAndQuickChipsBar(document.getElementById("templateSelect") ? document.getElementById("templateSelect").value : "general_soap", localCues);
+        autoSaveCurrentEncounter();
+      } else {
+        setManualNoteEditLock(false);
+        autoSaveCurrentEncounter();
+        assembleNote(true);
+      }
     }
 
     function getAllTemplateModuleEnumValues() {
@@ -5301,13 +5369,17 @@ Extract and return ONLY valid JSON matching:
           },
           detectedModule: {
             type: "STRING",
-            nullable: true,
             enum: moduleEnum,
-            description: "Best-matching clinical or operative module ID from #templateSelect based on dictation content."
+            description: "Valid template ID matching the visit or dictation, switching automatically if a different visit type was dictated or requested."
+          },
+          finalClinicalNote: {
+            type: "STRING",
+            description: "The complete, ready-to-paste clinical or operative note following the selected template's exact headings and formatting, adapting normal baseline exam lines to match what was dictated, honoring non-operative vs. operative plans accurately, and automatically appending a formal IN-CLINIC PROCEDURE NOTE (CPT 20610 / 20611) section whenever a joint injection or aspiration is dictated."
           },
           patientName: { type: "STRING", nullable: true },
           ageGender: { type: "STRING", nullable: true },
           laterality: { type: "STRING", nullable: true, enum: ["Right", "Left", "Bilateral"] },
+          oneLinerSummary: { type: "STRING", nullable: true, description: "1-liner clinical summary for the clinic roster / sheet." },
           subjective_hpi: {
             type: "STRING",
             nullable: true,
@@ -5449,6 +5521,25 @@ Extract and return ONLY valid JSON matching:
           },
           one_liner_summary: { type: "STRING", nullable: true },
           orders_needed_on_arrival: { type: "STRING", nullable: true },
+          waitlistSignup: {
+            type: "OBJECT",
+            nullable: true,
+            properties: {
+              signedUpForSurgery: { type: "BOOLEAN" },
+              plannedSurgery: { type: "STRING", nullable: true },
+              specialImplants: { type: "STRING", nullable: true },
+              infectionWorkupNeeded: { type: "BOOLEAN" },
+              infectionWorkupDetails: { type: "STRING", nullable: true },
+              targetSurgeryWindow: { type: "STRING", nullable: true },
+              specialistClearances: {
+                type: "ARRAY",
+                items: { type: "STRING" }
+              }
+            },
+            required: [
+              "signedUpForSurgery"
+            ]
+          },
           waitlist_signup: {
             type: "OBJECT",
             nullable: true,
@@ -5476,29 +5567,8 @@ Extract and return ONLY valid JSON matching:
           }
         },
         required: [
-          "explicitVoiceTemplateOverride",
           "detectedModule",
-          "patientName",
-          "ageGender",
-          "laterality",
-          "subjective_hpi",
-          "physical_exam",
-          "radiographic_findings",
-          "assessment_and_plan",
-          "operative_details",
-          "ebl",
-          "implants",
-          "closure",
-          "visitDisposition",
-          "indexProcedure",
-          "indexSurgeryDate",
-          "clinicProcType",
-          "clinicProcJoint",
-          "clinicProcDetails",
-          "formFieldUpdates",
-          "one_liner_summary",
-          "orders_needed_on_arrival",
-          "waitlist_signup"
+          "finalClinicalNote"
         ]
       };
     }
@@ -5592,7 +5662,256 @@ Extract and return ONLY valid JSON matching:
       }, 25000);
     }
 
-    // STAGE 2: Section-by-Section Structuring via Gemini Flash + systemInstruction + Strict OpenAPI responseSchema
+    // Reference Blueprint Generator for Whole-Note Template Synthesis
+    function getTemplateReferenceBlueprint(moduleType, matchedCase = null) {
+      const ptName = (document.getElementById("ptName") ? document.getElementById("ptName").value.trim() : "") || "[Patient Name]";
+      const ageGender = (document.getElementById("ptAgeGender") ? document.getElementById("ptAgeGender").value.trim() : "") || "[Age/Gender]";
+      const lat = (document.getElementById("lat") ? document.getElementById("lat").value.trim() : "") || "Right";
+      const todayStr = new Date().toLocaleDateString();
+
+      if (moduleType === "new_knee") {
+        return `ADULT RECONSTRUCTION CLINICAL CONSULTATION - NEW KNEE
+PATIENT: ${ptName} | DEMOGRAPHICS: ${ageGender}
+DATE OF SERVICE: ${todayStr}
+ATTENDING SURGEON: Dr. Spencer Schulte, MD (Adult Reconstruction)
+FACILITY: Eisenhower Army Medical Center (DDEAMC)
+BILLING & CODING: ICD-10-CM: M17.11 (Right) / M17.12 (Left) / M17.0 (Bilateral) | Planned CPT: 27447 (Total Knee Arthroplasty) or 27446 (Unicompartmental Knee Arthroplasty) | MDM: Moderate-to-High | E/M Level: 99204 / 99214
+
+CHIEF COMPLAINT & HISTORY OF PRESENT ILLNESS (HPI):
+[Describe chronic, progressive knee pain, weight-bearing mechanical pain, startup stiffness, crepitus, effusion, and specific functional ADL limitations.]
+[If surgical candidate: document failed prior conservative management exhausting >12 weeks of oral NSAIDs/analgesics, physical therapy/quadriceps strengthening, and intra-articular injections.]
+
+PHYSICAL EXAMINATION:
+- Alignment & Gait: Antalgic gait favoring operative side; coronal alignment without gross thrust.
+- Skin & Soft Tissue: Skin intact over anterior knee without erythema or open lesions; effusion assessment.
+- Knee Range of Motion & Stability:
+  * Active/Passive Arc of Motion: [Document flexion/extension ROM, e.g. 0° - 110°].
+  * Joint Line Tenderness: Compartmental joint line tenderness.
+  * Ligamentous Stability: Varus/valgus stability in extension and 30° flexion, Lachman, posterior drawer.
+- Distal Neurovascular Status: DP and PT pulses 2+ and symmetric; motor (EHL/TA/Gastroc) 5/5; light touch sensation intact; calves soft and nontender.
+
+INDEPENDENT RADIOGRAPHIC INTERPRETATION (PERSONAL REVIEW BY ATTENDING SURGEON):
+Standing weight-bearing AP, lateral, Rosenberg, and Merchant/sunrise radiographs personally reviewed and independently interpreted by Dr. Spencer Schulte, MD: [Document joint space narrowing, subchondral sclerosis, osteophytes, and mechanical alignment].
+
+MEDICAL DECISION MAKING (MDM), ASSESSMENT & PLAN:
+1. Diagnosis: [Tricompartmental / Medial compartment] osteoarthritis of the [Right / Left] knee.
+2. Treatment & Counseling:
+   - If NON-OPERATIVE: Frame strictly around conservative management: activity modification, quadriceps-strengthening home exercise program / physical therapy, NSAIDs / acetaminophen as tolerated, bracing, or intra-articular injection. Review natural history. NEVER state indicated for joint arthroplasty or order pre-op surgical clearance.
+   - If SURGICAL CANDIDATE: Patient indicated for joint arthroplasty (CPT 27447 TKA or 27446 UKA); patient elects to proceed. Review surgical approach, multimodal analgesia (adductor canal block), rapid recovery, and comprehensive risks/alternatives. Preoperative surgical clearance initiated (dental clearance, glycemic optimization, multimodal DVT prophylaxis).`;
+      }
+
+      if (moduleType === "new_hip") {
+        return `ADULT RECONSTRUCTION CLINICAL CONSULTATION - NEW HIP
+PATIENT: ${ptName} | DEMOGRAPHICS: ${ageGender}
+DATE OF SERVICE: ${todayStr}
+ATTENDING SURGEON: Dr. Spencer Schulte, MD (Adult Reconstruction)
+FACILITY: Eisenhower Army Medical Center (DDEAMC)
+BILLING & CODING: ICD-10-CM: M16.11 (Right) / M16.12 (Left) / M16.0 (Bilateral) | Planned CPT: 27130 (Total Hip Arthroplasty) | MDM: Moderate-to-High | E/M Level: 99204 / 99214
+
+CHIEF COMPLAINT & HISTORY OF PRESENT ILLNESS (HPI):
+[Describe chronic, progressive hip pain, groin/thigh localization, startup pain, stair negotiation, and specific functional ADL limitations (shoes/socks, ambulation distance).]
+[If surgical candidate: document failed prior conservative management exhausting >12 weeks of oral NSAIDs/analgesics, physical therapy, and activity modification.]
+
+PHYSICAL EXAMINATION:
+- Constitutional & Gait: Alert, oriented; antalgic Trendelenburg-compensated gait.
+- Skin & Soft Tissue: Intact over hip without erythema, induration, or active infection.
+- Hip Range of Motion & Special Testing:
+  * Flexion: [Document flexion arc, e.g. 100° with groin pain].
+  * Flexion Contracture: [e.g. 0°].
+  * Internal Rotation at 90° Flexion: [Document IR, e.g. 5°–10° with mechanical block].
+  * External Rotation at 90° Flexion: [e.g. 25°].
+  * Provocative Tests: Stinchfield test, FADIR anterior impingement, log roll.
+- Distal Neurovascular Status: DP and PT pulses 2+ symmetric; motor (EHL/TA/Gastroc) 5/5; light touch sensation intact L2-S1; calves soft and nontender.
+
+INDEPENDENT RADIOGRAPHIC INTERPRETATION (PERSONAL REVIEW BY ATTENDING SURGEON):
+Standing AP Pelvis and hip radiographs personally reviewed and independently interpreted by Dr. Spencer Schulte, MD: [Document joint space loss, subchondral sclerosis, osteophytes, cyst formation, and femoral canal morphology].
+
+MEDICAL DECISION MAKING (MDM), ASSESSMENT & PLAN:
+1. Diagnosis: [Primary Osteoarthritis / AVN / Dysplasia] of the [Right / Left] hip.
+2. Treatment & Counseling:
+   - If NON-OPERATIVE: Frame strictly around conservative care: activity modification, physical therapy, NSAIDs / acetaminophen as tolerated, weight optimization, or intra-articular injection. Review natural history. NEVER state indicated for joint arthroplasty or order pre-op surgical clearance.
+   - If SURGICAL CANDIDATE: Patient indicated for joint arthroplasty (CPT 27130 Direct Anterior Total Hip Arthroplasty); patient elects to proceed. Review muscle-sparing Direct Anterior intermuscular interval, fluoroscopic guidance, rapid rehabilitation, and comprehensive risks/alternatives. Preoperative surgical clearance initiated (dental clearance, glycemic optimization, multimodal DVT prophylaxis).`;
+      }
+
+      if (moduleType === "postop") {
+        const proc = matchedCase ? formatCaseProcedureWithLaterality(matchedCase) : "Total Joint Arthroplasty";
+        const dos = (matchedCase && matchedCase.dos) ? matchedCase.dos : "[DOS]";
+        const implants = (matchedCase && matchedCase.implants) ? matchedCase.implants : "Well-fixed prosthetic components per operative record / radiograph review";
+        const approach = (matchedCase && matchedCase.approach) ? matchedCase.approach : "Direct Anterior / Standard";
+        return `POST-OPERATIVE CLINICAL SURVEILLANCE NOTE ([INTERVAL: 2W / 6W / 12W / 1Y])
+PATIENT: ${ptName} | DEMOGRAPHICS: ${ageGender}
+DATE: ${todayStr}
+ATTENDING SURGEON: Dr. Spencer Schulte, MD (Adult Reconstruction)
+HOSPITAL: DDEAMC
+
+INDEX SURGICAL HISTORY:
+Patient presents for scheduled post-operative evaluation s/p ${proc} performed on ${dos} by Dr. Spencer Schulte, MD (or designated colleague if explicitly dictated).
+Surgical Approach: ${approach}.
+Operative Implants: ${implants}.
+Index Closure: [Stratafix / Prineo / Prevena].
+
+SUBJECTIVE / INTERVAL HISTORY & RECOVERY:
+[Interval pain trajectory, mobilization milestones, assistive device use, DVT chemoprophylaxis adherence, and PT participation.]
+
+PHYSICAL EXAMINATION:
+- Surgical Incision: Clean, dry, intact without erythema, dehiscence, or active drainage.
+- Focused Musculoskeletal & ROM Exam: [Document active/passive ROM, extensor lag, stability].
+- Neurovascular & DVT Screen: Calves soft, nontender, negative Homan's. Distal pulses (DP/PT) 2+ symmetric. Motor and light touch sensation intact distally.
+
+RADIOGRAPHIC ASSESSMENT (PERSONAL REVIEW BY ATTENDING SURGEON):
+Orthogonal postoperative radiographs personally reviewed by Dr. Spencer Schulte, MD demonstrate anatomical component position, intact bone-implant interface without radiolucencies, and no hardware loosening or subsidence.
+
+ASSESSMENT & PLAN:
+1. Status post ${proc} (${dos}) — progressing satisfactorily.
+2. Specific Plan & Precautions: [Weight-bearing status, therapy progression, medication management, DVT prophylaxis duration].
+3. Return precautions (fever, wound drainage, calf swelling, acute pain) reviewed with patient.`;
+      }
+
+      if (moduleType === "painful_joint") {
+        return `EVALUATION OF THE PAINFUL / FAILED TOTAL JOINT ARTHROPLASTY
+PATIENT: ${ptName} | DEMOGRAPHICS: ${ageGender}
+DATE: ${todayStr}
+ATTENDING SURGEON: Dr. Spencer Schulte, MD (Adult Reconstruction)
+
+SUBJECTIVE & INDEX HISTORY:
+Evaluation of painful joint arthroplasty. Chronology, onset of pain, startup pain vs pain at rest, weight bearing tolerance, instability or giving way.
+
+PHYSICAL EXAMINATION:
+- Surgical Incision: Well-healed surgical incision without sinus tract or active drainage.
+- Focused Musculoskeletal & ROM Exam: Range of motion, coronal/sagittal stability, provocative testing, and soft-tissue envelope.
+- Neurovascular Status: Distal pulses 2+; motor and sensation intact.
+
+RADIOGRAPHIC & IMAGING ASSESSMENT:
+Orthogonal weight-bearing radiographs evaluated for implant fixation, radiolucent lines, osteolysis, component positioning, and coronal/sagittal alignment.
+
+PERIPROSTHETIC JOINT INFECTION (PJI) EXCLUSION WORKUP:
+- Serum Biomarkers: ESR, CRP, CBC.
+- Synovial Fluid Aspiration: Cell count, differential, gram stain, alpha-defensin, anaerobic/aerobic cultures.
+- Interpretation: Evaluated per ICM / MSIS diagnostic consensus criteria.
+
+PLAN:
+1. PJI exclusion / evaluation pending complete synovial fluid cultures.
+2. Reconstruction pathway (conservative optimization, isolated liner exchange, component revision, or staged PJI management).
+3. Specific Plan & Follow-Up.`;
+      }
+
+      if (moduleType === "op_da_tha") {
+        return `OPERATIVE REPORT — DIRECT ANTERIOR TOTAL HIP ARTHROPLASTY
+PATIENT: ${ptName} | DEMOGRAPHICS: ${ageGender}
+DATE OF SURGERY: ${todayStr}
+LOCATION: Dwight D. Eisenhower Army Medical Center (DDEAMC)
+SURGEON: Spencer Schulte, MD
+
+PREOPERATIVE DIAGNOSIS:
+1. End-stage primary osteoarthritis of the ${lat} hip
+
+POSTOPERATIVE DIAGNOSIS:
+1. End-stage primary osteoarthritis of the ${lat} hip
+
+PROCEDURES PERFORMED:
+1. ${lat} Total Hip Arthroplasty via Direct Anterior Approach (CPT 27130)
+2. Multi-view intraoperative fluoroscopic guidance and radiographic interpretation
+
+ANESTHESIA: Spinal anesthesia with sedation and pericapsular local anesthetic infiltration
+ESTIMATED BLOOD LOSS: 100 cc
+DRAINS: None
+FLUIDS: Crystalloid; 1 g IV tranexamic acid (TXA) prior to incision and 1 g IV TXA at closure
+COMPLICATIONS: None
+SPECIMENS: Femoral head and articular debris to pathology
+
+IMPLANTS UTILIZED:
+• Acetabular Shell: Zimmer Biomet G7 OsseoTi Acetabular Shell
+• Acetabular Liner: Zimmer Biomet E1 / Vivacit-E Highly Crosslinked Polyethylene (HXLPE) Liner
+• Femoral Stem: Zimmer Biomet Avenir Complete / Taperloc Complete / Z1 Femoral Stem
+• Femoral Head: Zimmer Biomet Biolox Delta Ceramic Femoral Head
+
+INTRAOPERATIVE FINDINGS:
+1. Advanced Kellgren-Lawrence Grade IV osteoarthritis of the ${lat} hip.
+2. Rigid press-fit equatorial purchase of G7 acetabular shell at 40°–42° abduction and 18°–20° anteversion confirmed on orthogonal fluoroscopy.
+3. Rigid axial and rotational fit of femoral stem seated flush on medial calcar.
+4. Equalized leg lengths and restored femoral offset verified fluoroscopically with dynamic stability.
+
+INDICATIONS FOR SURGERY:
+Debilitating osteoarthritis refractory to conservative care. Risks, benefits, and alternatives reviewed. Informed consent obtained.
+
+DESCRIPTION OF PROCEDURE:
+1. Positioning on Hana table, sterile prep, draped, Time-Out.
+2. Standard longitudinal or bikini Direct Anterior approach via Smith-Petersen interval.
+3. Femoral neck osteotomy and head extraction.
+4. Hemispherical acetabular reaming, G7 cup impaction under fluoroscopy, E1 liner seated.
+5. Femoral canal preparation, sequential broaching, trial reduction with fluoroscopic leg length check.
+6. Final femoral stem and Biolox Delta ceramic head impaction.
+7. Periarticular injection. Layered Stratafix barbed suture closure with Prineo/Aquacel dressing.
+
+POSTOPERATIVE PLAN & REHABILITATION PROTOCOL:
+1. Weight-bearing as tolerated (WBAT) immediately with walker.
+2. Standard Direct Anterior hip precautions.
+3. DVT Prophylaxis: Aspirin 81 mg PO BID x 4-6 weeks.
+4. Multimodal pain regimen. Follow up in 2 weeks.`;
+      }
+
+      if (moduleType === "op_primary_tka") {
+        return `OPERATIVE REPORT - PRIMARY TOTAL KNEE ARTHROPLASTY
+PATIENT: ${ptName} | DEMOGRAPHICS: ${ageGender}
+DATE OF SURGERY: ${todayStr}
+SURGEON: Dr. Spencer Schulte, MD
+HOSPITAL: DDEAMC
+
+PROCEDURE: Primary Tricompartmental Total Knee Arthroplasty (CPT 27447)
+ANESTHESIA: Spinal / General with adductor canal block
+ESTIMATED BLOOD LOSS: 50 cc
+
+IMPLANTS UTILIZED:
+Zimmer Biomet Persona Total Knee Arthroplasty Construct (Femoral Component, Tibial Baseplate, Modular Articular Surface Insert, All-Polyethylene Patella)
+
+TECHNIQUE & BALANCE:
+Medial parapatellar arthrotomy. Measured resection technique. Femoral and tibial cuts verified perpendicular to mechanical axis. Extension and flexion gaps balanced symmetrically. Patellar tracking confirmed central without lateral tilt (no-thumb technique).
+
+WOUND CLOSURE:
+Layered closure with Stratafix barbed absorbable sutures, Dermabond Prineo / Aquacel Ag dressing.
+
+PRECAUTIONS & PLAN:
+1. Weight bearing as tolerated immediately. Early active knee extension/flexion.
+2. DVT Prophylaxis: Aspirin 81 mg PO BID.
+3. Multimodal oral analgesia. Follow up in 2 weeks.
+
+OPERATIVE DETAILS & FINDINGS:
+End-stage tricompartmental osteoarthritis; bone cuts and balanced flexion/extension gaps completed without complication.`;
+      }
+
+      if (moduleType.startsWith("custom_")) {
+        const idx = parseInt(moduleType.split("_")[1]);
+        const customTmpl = (getCustomTemplates && getCustomTemplates()[idx]) ? getCustomTemplates()[idx] : null;
+        if (customTmpl && customTmpl.body) {
+          return customTmpl.body;
+        }
+      }
+
+      // Default General SOAP / Consult structure
+      return `ORTHOPEDIC CLINICAL EVALUATION (SOAP / CONSULT NOTE)
+PATIENT: ${ptName} | DEMOGRAPHICS: ${ageGender}
+DATE OF SERVICE: ${todayStr}
+ATTENDING SURGEON: Dr. Spencer Schulte, MD (Orthopedic Surgery)
+FACILITY: Eisenhower Army Medical Center (DDEAMC)
+BILLING & CODING: E/M Level: 99203 / 99204 / 99214
+
+SUBJECTIVE / HISTORY OF PRESENT ILLNESS (HPI):
+[Patient presents for orthopedic evaluation and management. Document onset, nature of symptoms, provoking/palliating factors, functional limitations, and prior treatments.]
+
+OBJECTIVE / PHYSICAL EXAMINATION:
+- Constitutional: Alert, oriented, in no acute distress.
+- Musculoskeletal Exam: Skin intact without erythema or effusion. Range of motion and stability evaluated.
+- Distal Neurovascular Status: Motor 5/5, sensation intact, distal pulses 2+ symmetric.
+
+INDEPENDENT RADIOGRAPHIC & DIAGNOSTIC INTERPRETATION:
+Available diagnostic imaging and clinical records reviewed personally and independently interpreted by Dr. Spencer Schulte, MD.
+
+ASSESSMENT & PLAN:
+1. Clinical Impression & Management: [Diagnosis and specific treatment plan].
+2. Counseling & Return Precautions: Discussed diagnosis, conservative versus surgical treatment options, rehabilitation expectations, and explicit return precautions with patient.`;
+    }
+
+    // STAGE 2: Whole-Note Synthesis via Gemini Flash + Doximity-Style Reference Template Synthesis + Strict OpenAPI responseSchema
     async function structureTranscriptStage2(cleanTranscript, moduleType, matchedCase = matchedCaseData) {
       const apiKey = getGeminiApiKey().trim();
       if (!apiKey) {
@@ -5601,27 +5920,51 @@ Extract and return ONLY valid JSON matching:
       }
 
       const caseContextStr = matchedCase
-        ? `Matched Surgical Case DB Record: Patient=${matchedCase.patientName}, Age/Sex=${matchedCase.ageGender || "Adult"}, Procedure=${formatCaseProcedureWithLaterality(matchedCase)}, DOS=${matchedCase.dos || "Prior"}, Approach=${matchedCase.approach || "Standard"}, Implants=${matchedCase.implants || "Documented"}, Closure=${matchedCase.closure || "Standard"}, PostOpProtocol=${matchedCase.postOpInstructions || "Routine"}`
+        ? `Matched Surgical Case DB Record: Patient=${matchedCase.patientName}, Age/Sex=${matchedCase.ageGender || "Adult"}, Procedure=${formatCaseProcedureWithLaterality(matchedCase)}, DOS=${matchedCase.dos || "Prior"}, Approach=${matchedCase.approach || "Direct Anterior / Standard"}, Implants=${matchedCase.implants || "Documented"}, Closure=${matchedCase.closure || "Standard"}, PostOpProtocol=${matchedCase.postOpInstructions || "Routine"}, Alerts/Complications=${matchedCase.complications || "None"}`
         : "No prior Surgical Case DB record matched.";
 
-      const systemInstructionText = `You are an expert orthopaedic adult reconstruction & trauma clinical documentation structuring engine for Dr. Spencer Schulte, MD at DDEAMC.
-Strictly partition the physician's transcript into distinct clinical sections and form field updates according to the OpenAPI responseSchema:
-1. subjective_hpi: Subjective History of Present Illness (HPI) and interval recovery ONLY. Never include physical examination findings, range of motion numbers, or X-ray/MRI findings in subjective_hpi.
-2. physical_exam: Objective physical examination findings ONLY (surgical incision appearance, range of motion, stability, provocative tests, motor/sensory/vascular status, gait).
-3. radiographic_findings: Radiographic, X-ray, fluoroscopic, CT, or MRI findings ONLY.
-4. assessment_and_plan: Numbered Assessment & Plan ONLY (e.g., "1. ...\\n2. ...").
-5. operative_details, ebl, implants, closure ("default" | "prineo" | "prevena"): Populate when operative details, blood loss, implants, or wound closure are dictated.
-6. explicitVoiceTemplateOverride & detectedModule: Set explicitVoiceTemplateOverride ONLY if the surgeon explicitly asked by voice to use/switch to a specific template, and strip that spoken meta-command from all clinical text fields.
-7. formFieldUpdates: Populate matching active template input fields (hipIR, hipFC, kneeROM, kneeStab, postopInterval, postopIncision, pjiLabs, pjiAsp, clinicProcType, optAnticoag, optGlp1, etc.).
-8. waitlist_signup: Set signedUpForSurgery=true whenever the patient is signing up, consenting, or being scheduled for surgery, and extract plannedSurgery, specialImplants, infectionWorkupNeeded, infectionWorkupDetails, targetSurgeryWindow, and specialistClearances.
-9. visitDisposition: "nonoperative" when the plan is conservative care (physical therapy, NSAIDs, bracing, weight loss, injection, or deferring surgery); "surgical_candidate" ONLY when the patient elects, consents, or signs up for surgery; otherwise "undecided". Never describe a patient as indicated for arthroplasty unless surgical_candidate.
-10. indexProcedure / indexSurgeryDate: For post-op visits, copy the prior operation (joint + laterality + approach) and date exactly as dictated. Never convert a hip (THA) into a knee (TKA) or vice versa, even if a Case DB record lists a different joint; the dictation wins.
-11. clinicProcType / clinicProcJoint / clinicProcDetails: Set only if an injection or aspiration was PERFORMED today. Copy injectate drugs/doses or aspirate details exactly as dictated (null if doses not dictated).`;
+      const templateBlueprint = getTemplateReferenceBlueprint(moduleType, matchedCase);
+      const currentPtName = (document.getElementById("ptName") ? document.getElementById("ptName").value.trim() : "") || "[Patient Name]";
+      const currentAgeGender = (document.getElementById("ptAgeGender") ? document.getElementById("ptAgeGender").value.trim() : "") || "[Age/Gender]";
+      const currentLat = (document.getElementById("lat") ? document.getElementById("lat").value.trim() : "") || "Right";
+
+      const systemInstructionText = `You are a Doximity-grade whole-note clinical documentation AI synthesizer for Dr. Spencer Schulte, MD (Adult Reconstruction & Trauma Orthopaedic Surgeon at Dwight D. Eisenhower Army Medical Center / DDEAMC).
+Your primary mission is to generate the complete, polished, ready-to-paste clinical or operative note in 'finalClinicalNote' matching Dr. Schulte's practice style and following the active template's exact headings and layout.
+
+DR. SCHULTE'S CLINICAL & OPERATIVE PREFERENCES:
+- Practice Defaults: Adult Reconstruction (Zimmer Biomet Persona TKA, Oxford UKA, G7/Taperloc/Avenir DA-THA, Arcos modular revision); Trauma (Synthes VA-LCP/TFNA, Stryker Gamma4/Hoffmann); Closure (Stratafix barbed sutures, Sylke/Aquacel Ag, Dermabond Prineo, or Prevena ciNPT).
+- Note Synthesis Guidelines:
+  1. Produce the full, ready-to-paste note directly into 'finalClinicalNote'. Do not omit any sections; provide complete, grammatically sound clinical documentation.
+  2. Retain the selected template's exact headings, structure, and professional cadence as demonstrated in the reference blueprint.
+  3. Adapt normal baseline exam findings to reflect dictated abnormalities (ROM, incision, stability, neurovascular status) while maintaining comprehensive documentation.
+  4. Honor non-operative vs. surgical candidate dispositions accurately:
+     - If non-operative (PT, NSAIDs, weight loss, injection, deferring surgery, or visitDisposition="nonoperative"), frame the Assessment & Plan strictly around conservative care and NEVER mention surgical arthroplasty indication or pre-op surgical clearance.
+     - If surgical candidate (signing up, consenting, scheduling, or waitlistSignup.signedUpForSurgery=true), include full surgical indication, shared decision making, risks, and pre-op clearance workup.
+  5. In-Clinic Procedure Note (CPT 20610 / 20611): Whenever an in-clinic injection or joint aspiration is dictated, automatically append a formal "IN-CLINIC PROCEDURE NOTE (CPT 20610 / 20611)" block at the bottom covering:
+     - Procedure & CPT Code: (e.g. Intra-Articular Corticosteroid Injection — CPT 20610, or 20611 if ultrasound guided)
+     - Target Joint & Laterality: (e.g. Right Knee / Left Hip)
+     - Informed Consent & Time-Out
+     - Sterile Preparation & Aseptic Technique: ChloraPrep prep, strict aseptic technique
+     - Approach / Guidance: (e.g. Landmark-guided superolateral suprapatellar approach in extension)
+     - Injectate / Aspirate Details: default corticosteroid cocktail to "40mg Triamcinolone acetonide (Kenalog) + 4mL 1% Lidocaine + 4mL 0.25% Bupivacaine (Marcaine)" if specific doses were not dictated
+     - Post-Procedure Tolerance & Neurovascular Check: Patient tolerated well, hemostasis achieved, neurovascularly intact.
+  6. For post-op visits, always honor the dictated prior surgery joint and laterality (never flip a hip to a knee or vice-versa), and incorporate any matched Case DB surgical details (DOS, approach, implants, closure).
+  7. Auto-detect template: If the dictation clearly fits a different template or the user dictates a meta-command (e.g. 'use sports template'), set 'detectedModule' to that template and format 'finalClinicalNote' using that template's structure.`;
 
       const userPromptText = `Active Template ID: "${moduleType}"
 ${caseContextStr}
 
-Physician Transcript:
+CURRENT PATIENT CONTEXT:
+Patient Name: ${currentPtName}
+Age/Gender: ${currentAgeGender}
+Laterality: ${currentLat}
+
+ACTIVE TEMPLATE REFERENCE STRUCTURE & HEADINGS:
+"""
+${templateBlueprint}
+"""
+
+PHYSICIAN DICTATION / TRANSCRIPT:
 """
 ${cleanTranscript}
 """`;
@@ -5653,6 +5996,147 @@ ${cleanTranscript}
         throw new Error("Stage 2 returned invalid JSON.");
       }
       return parsed;
+    }
+
+    // --- One-Tap Smart Edits & Note Refinement (Doximity Style) ---
+    async function applyNoteRefinement(instructionText) {
+      const currentNote = document.getElementById("noteOutput").value.trim();
+      if (!currentNote) {
+        alert("Please generate or dictate a clinical note first.");
+        return;
+      }
+      const instruction = (instructionText || "").trim();
+      if (!instruction) return;
+
+      const apiKey = getGeminiApiKey().trim();
+      if (!apiKey) {
+        toggleApiKeyModal();
+        return;
+      }
+
+      const spinner = document.getElementById("refineStatusSpinner");
+      const submitBtn = document.getElementById("refineSubmitBtn");
+      if (spinner) spinner.classList.remove("hidden");
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerText = "Refining...";
+      }
+
+      const systemInstruction = `You are an expert orthopaedic clinical documentation editor for Dr. Spencer Schulte, MD (Adult Reconstruction & Trauma Orthopaedic Surgeon at DDEAMC).
+Your task is to take the existing clinical or operative note and apply the physician's requested refinement cleanly in-place.
+Output ONLY the revised, complete clinical note text with no markdown commentary, no conversational preambles, and no surrounding quotes or backticks. Retain Dr. Schulte's professional tone, exact headings, and formatting.`;
+
+      const userPrompt = `Current Clinical Note:
+"""
+${currentNote}
+"""
+
+Requested Refinement / Modification:
+"${instruction}"
+
+Generate and return ONLY the complete refined clinical note:`;
+
+      try {
+        const refinedNote = await executeGeminiGenerateContentWithFallback(apiKey, (model, allowExtraConfig) => {
+          const bodyObj = {
+            systemInstruction: { parts: [{ text: systemInstruction }] },
+            contents: [{ role: "user", parts: [{ text: userPrompt }] }]
+          };
+          if (allowExtraConfig && model.startsWith("gemini-2.5")) {
+            bodyObj.generationConfig = { thinkingConfig: { thinkingBudget: 0 } };
+          }
+          return bodyObj;
+        }, 25000);
+
+        if (refinedNote && refinedNote.trim()) {
+          let cleaned = refinedNote.trim();
+          cleaned = cleaned.replace(/^```[a-z]*\s*\n/i, "").replace(/\n```$/g, "").trim();
+          document.getElementById("noteOutput").value = cleaned;
+          setManualNoteEditLock(true);
+          const lockBadge = document.getElementById("manualEditLockBadge");
+          if (lockBadge) {
+            lockBadge.innerText = "✨ Note Refined";
+            lockBadge.className = "text-[10px] font-semibold px-2 py-0.5 rounded-full bg-sky-950/70 border border-sky-500/50 text-sky-300";
+            lockBadge.classList.remove("hidden");
+          }
+          if (activeEncounterId) {
+            const encounters = getClinicEncounters(currentClinicDate);
+            const enc = encounters.find(e => e.id === activeEncounterId);
+            if (enc) {
+              enc.assembledNote = cleaned;
+              safeSetLocalStorage(`orthoflow_encounters_${currentClinicDate}`, JSON.stringify(encounters));
+            }
+          }
+          const refineInput = document.getElementById("refineNoteInput");
+          if (refineInput) refineInput.value = "";
+        }
+      } catch (err) {
+        console.error("Note refinement error:", err);
+        alert(`Note Refinement Error:\n${err.message || err}`);
+      } finally {
+        if (spinner) spinner.classList.add("hidden");
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerText = "Refine ⚡";
+        }
+      }
+    }
+
+    let refineSpeechRec = null;
+    function toggleRefineMic() {
+      const micBtn = document.getElementById("refineMicBtn");
+      const input = document.getElementById("refineNoteInput");
+      const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRec) {
+        alert("Speech recognition is not supported in this browser. Please type your instruction in the refine box.");
+        if (input) input.focus();
+        return;
+      }
+      if (refineSpeechRec) {
+        try { refineSpeechRec.stop(); } catch(e){}
+        refineSpeechRec = null;
+        if (micBtn) micBtn.classList.remove("text-rose-500", "animate-pulse");
+        return;
+      }
+      try {
+        const rec = new SpeechRec();
+        rec.continuous = false;
+        rec.interimResults = true;
+        rec.lang = "en-US";
+        if (micBtn) micBtn.classList.add("text-rose-500", "animate-pulse");
+        rec.onresult = (evt) => {
+          let finalStr = "";
+          for (let i = 0; i < evt.results.length; i++) {
+            finalStr += evt.results[i][0].transcript;
+          }
+          if (input && finalStr) input.value = finalStr;
+        };
+        rec.onend = () => {
+          refineSpeechRec = null;
+          if (micBtn) micBtn.classList.remove("text-rose-500", "animate-pulse");
+        };
+        rec.onerror = (e) => {
+          console.warn("SpeechRec error:", e);
+          refineSpeechRec = null;
+          if (micBtn) micBtn.classList.remove("text-rose-500", "animate-pulse");
+        };
+        refineSpeechRec = rec;
+        rec.start();
+      } catch (err) {
+        console.warn("Speech recognition failed:", err);
+        if (micBtn) micBtn.classList.remove("text-rose-500", "animate-pulse");
+      }
+    }
+
+    function submitCustomNoteRefinement() {
+      const input = document.getElementById("refineNoteInput");
+      const text = input ? input.value.trim() : "";
+      if (!text) {
+        alert("Please type or dictate an instruction first (e.g. 'Add that we reviewed MRI').");
+        return;
+      }
+      applyNoteRefinement(text);
+    }
     }
 
     function getOfflineAiQueue() {
@@ -5759,7 +6243,6 @@ ${cleanTranscript}
             if (job.audioBase64 && transcriptToStructure) {
               document.getElementById("dictationBox").value = transcriptToStructure;
             }
-            setManualNoteEditLock(false);
             applyParsedDictationData(parsed);
           } else {
             const encounters = getClinicEncounters(job.clinicDate);
@@ -5767,6 +6250,7 @@ ${cleanTranscript}
             if (enc) {
               if (job.audioBase64 && transcriptToStructure) enc.dictation = transcriptToStructure;
               if (parsed.detectedModule && parsed.detectedModule !== "auto_detect") enc.moduleVal = parsed.detectedModule;
+              if (parsed.finalClinicalNote) enc.assembledNote = parsed.finalClinicalNote;
               if (parsed.ageGender) enc.ageGender = parsed.ageGender;
               if (parsed.one_liner_summary || parsed.assessment_and_plan) enc.planSummary = parsed.one_liner_summary || parsed.assessment_and_plan;
               if (parsed.radiographic_findings) enc.xrayFindings = parsed.radiographic_findings;
