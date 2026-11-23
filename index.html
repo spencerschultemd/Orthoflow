@@ -5842,32 +5842,170 @@ POSTOPERATIVE PLAN & REHABILITATION PROTOCOL:
       }
 
       if (moduleType === "op_primary_tka") {
-        return `OPERATIVE REPORT - PRIMARY TOTAL KNEE ARTHROPLASTY
-PATIENT: ${ptName} | DEMOGRAPHICS: ${ageGender}
-DATE OF SURGERY: ${todayStr}
-SURGEON: Dr. Spencer Schulte, MD
-HOSPITAL: DDEAMC
+        const latUpper = lat.toUpperCase();
+        const latLower = lat.toLowerCase();
+        const icd = latLower === "left" ? "M17.12 (Left Knee Osteoarthritis)" : "M17.11 (Right Knee Osteoarthritis)";
+        return `DATE OF SURGERY: ${todayStr}
 
-PROCEDURE: Primary Tricompartmental Total Knee Arthroplasty (CPT 27447)
-ANESTHESIA: Spinal / General with adductor canal block
+PREOPERATIVE DIAGNOSIS:
+1. ${lat} Knee Osteoarthritis (${icd})
+
+POSTOPERATIVE DIAGNOSIS:
+1. ${lat} Knee Osteoarthritis (${icd})
+
+PROCEDURES PERFORMED:
+1. ${lat} Primary Total Knee Arthroplasty (CPT 27447)
+2. Intraosseous Regional Administration of Vancomycin Infusion (CPT 36680)
+
+LOCATION: Dwight D. Eisenhower Army Medical Center (DDEAMC) / RUMC
+SURGEON: Spencer Schulte, MD
+ASSISTANT: PA-C
+
+ANESTHESIA TYPE: Spinal
 ESTIMATED BLOOD LOSS: 50 cc
+DRAINS: None
+SPECIMEN: Resected articular bone and cartilage
+COMPLICATIONS: None immediately apparent
+FINDINGS: End-stage tricompartmental osteoarthritis of the ${latLower} knee with full-thickness articular cartilage loss, eburnated subchondral bone, marginal osteophytes, and associated varus deformity.
 
-IMPLANTS UTILIZED:
-Zimmer Biomet Persona Total Knee Arthroplasty Construct (Femoral Component, Tibial Baseplate, Modular Articular Surface Insert, All-Polyethylene Patella)
+IMPLANTS:
+- Femoral Component: Zimmer Biomet Persona CR, size [dictated size] (cemented)
+- Tibial Baseplate: Zimmer Biomet Persona Tibial Baseplate, size [dictated size] (cemented)
+- Articular Insert: Zimmer Biomet Persona MC (Medial Congruent) Polyethylene Insert, [dictated size] mm
+- Native patella retained; lateral facetectomy performed (or Persona 3-peg cemented all-polyethylene patella resurfaced if dictated)
 
-TECHNIQUE & BALANCE:
-Medial parapatellar arthrotomy. Measured resection technique. Femoral and tibial cuts verified perpendicular to mechanical axis. Extension and flexion gaps balanced symmetrically. Patellar tracking confirmed central without lateral tilt (no-thumb technique).
+INDICATIONS FOR SURGERY:
+This is a ${ageGender} who presented with chronic, severe ${latLower} knee pain refractory to extensive non-operative treatment (including oral anti-inflammatory and pain-relieving medications, formal physical therapy, activity modification, and intra-articular corticosteroid injections), resulting in progressive impairment of activities of daily living. Radiographic evaluation demonstrated end-stage bone-on-bone knee osteoarthritis with varus deformity. Surgical versus non-surgical options were discussed in detail with the patient, and together we decided it was best to proceed with a primary total knee arthroplasty with the goals of pain relief, restoration of stability, and functional improvement. All risks and benefits of surgery including bleeding, infection, instability, periprosthetic fracture, extensor mechanism disruption, neurovascular injury (including peroneal nerve injury), stiffness, ongoing pain, as well as medical and anesthesia-related complications were discussed with the patient and family, who elected to proceed.
 
-WOUND CLOSURE:
-Layered closure with Stratafix barbed absorbable sutures, Dermabond Prineo / Aquacel Ag dressing.
+PROCEDURE IN DETAIL:
+Following correct identification of the patient and verification of the operative extremity, the patient was brought into the operating room and positioned supine on a standard operating table. Intravenous perioperative antibiotics and the above anesthesia were administered prior to incision per standard clinical protocol. A non-sterile padded pneumatic tourniquet was placed around the proximal operative thigh. The operative lower extremity was prepped and draped in the standard sterile orthopedic fashion. The extremity was exsanguinated using a sterile Esmarch bandage, and the thigh tourniquet was inflated to 250 mmHg.
 
-PRECAUTIONS & PLAN:
-1. Weight bearing as tolerated immediately. Early active knee extension/flexion.
-2. DVT Prophylaxis: Aspirin 81 mg PO BID.
-3. Multimodal oral analgesia. Follow up in 2 weeks.
+Prior to incision, regional intraosseous antibiotic prophylaxis was administered by infusing 500 mg of Vancomycin diluted in 100 mL of normal saline directly into the proximal medial tibia utilizing an intraosseous needle catheter (CPT 36680).
 
-OPERATIVE DETAILS & FINDINGS:
-End-stage tricompartmental osteoarthritis; bone cuts and balanced flexion/extension gaps completed without complication.`;
+A standard midline longitudinal skin incision was made medial to the tibial tubercle and centered over the patella, carried sharply down to the extensor mechanism and knee joint capsule. Minimal subfascial flaps were created to preserve cutaneous blood supply. A midvastus capsular arthrotomy was performed. The deep medial collateral ligament (MCL) was subperiosteally elevated along the medial proximal tibial joint line to achieve adequate exposure.
+
+The native patella was everted and inspected. Extensive peripheral osteophytes were resected to decompress the extensor mechanism. The native patellar articular surface was retained and a lateral facetectomy was performed, re-establishing physiologic patellofemoral tracking without lateral tilt.
+
+Attention was directed to the distal femur. An intramedullary femoral alignment guide was placed, and the distal femoral resection was performed in 5° to 6° of valgus, verified perpendicular to the mechanical axis of the femur.
+
+Attention was then turned to the proximal tibia. An extramedullary tibial alignment guide was positioned aligned with the tibial crest and the second metatarsal, with anatomic posterior slope. A proximal tibial resection was performed and verified perpendicular to the tibial shaft axis.
+
+Extension gap was evaluated using spacer blocks and verified to be symmetric, parallel, and stable. Attention was then directed back to the femur for flexion gap preparation. A 4-in-1 femoral sizing and resection block was positioned referencing the anterior cortex and posterior condyles. Anterior, posterior, and chamfer resections were completed. Menisci were excised, the anterior cruciate ligament was resected, and the posterior cruciate ligament was preserved and balanced. Posterior femoral osteophytes and loose bodies were thoroughly debrided.
+
+The proximal tibia was prepared using the appropriate tibial sizing tray aligned with the junction of the medial and middle thirds of the tibial tubercle. The tibial keel punch was completed.
+
+Trial reduction was performed using the appropriate trial femoral component, trial tibial baseplate, and trial modular insert. The knee was taken through a full passive range of motion from complete extension (0°) to beyond 120° of flexion. Varus and valgus stability were verified in full extension, 30°, 60°, and 90° of flexion. Patellar tracking was assessed with the "no-thumb" technique and confirmed central tracking within the femoral trochlea without tilt or subluxation.
+
+The trial components were removed. The bony surfaces were thoroughly cleansed with copious pulsed lavage irrigation and dried. High-viscosity bone cement with gentamycin/tobramycin was mixed and pressurized into the cancellous bone of the distal femur and proximal tibia. The definitive femoral component and tibial baseplate were seated and impacted into place. Extruded cement was meticulously removed circumferentially. The knee was brought into full extension with an insert spacer to maintain pressurized cement fixation until full polymerization.
+
+The definitive polyethylene articular insert was seated and locked securely into the tibial baseplate, with the locking mechanism confirmed intact.
+
+The pneumatic tourniquet was deflated. Meticulous hemostasis was achieved using bipolar electrocautery. A periarticular cocktail of liposomal bupivacaine / ropivacaine was infiltrated into the posterior capsule, collateral ligaments, and periosteum.
+
+Layered anatomic wound closure was performed. The arthrotomy was reapproximated with a running heavy barbed absorbable suture (#1/#2 Stratafix). The deep fascial and subcutaneous layers were closed with 2-0 absorbable barbed sutures. The skin was closed with a running 3-0 subcuticular suture, reinforced with Dermabond Prineo skin closure system and an Aquacel Ag sterile compressive dressing.
+
+ASSISTANT ATTESTATION:
+A qualified Physician Assistant (PA-C) was present and medically necessary throughout the procedure, assisting with limb positioning, retraction and surgical exposure, component trial reduction, pressurized cementation, and layered closure. Sponge, needle, and instrument counts were correct at the conclusion of the procedure.
+
+POSTOPERATIVE PLAN & REHABILITATION PROTOCOL:
+1. Weight-Bearing: Weight-bearing as tolerated (WBAT) POD 0 on the operative lower extremity with walker.
+2. DVT Prophylaxis: Aspirin 81 mg PO BID for 6 weeks (or Eliquis/Lovenox if elevated risk).
+3. Pain Management: Multimodal oral analgesia (Tylenol 1000 mg PO TID, Celebrex 200 mg PO BID, Suzetrigine 50 mg PO BID, PRN Oxycodone 5 mg PO Q4H for breakthrough pain).
+4. Physical Therapy: Early active knee range of motion and quadriceps reactivation.
+5. Follow-Up: 2 weeks for surgical wound check and clinical surveillance.`;
+      }
+
+      if (moduleType === "op_uka") {
+        const latLower = lat.toLowerCase();
+        return `DATE OF SURGERY: ${todayStr}
+
+PREOPERATIVE DIAGNOSIS:
+1. Anteromedial Osteoarthritis of the ${lat} Knee (M17.11 / M17.12)
+
+POSTOPERATIVE DIAGNOSIS:
+1. Anteromedial Osteoarthritis of the ${lat} Knee (M17.11 / M17.12)
+
+PROCEDURES PERFORMED:
+1. ${lat} Unicompartmental Knee Arthroplasty (UKA) / Partial Knee Arthroplasty (CPT 27446)
+2. Intraosseous Regional Administration of Vancomycin Infusion (CPT 36680)
+
+LOCATION: Dwight D. Eisenhower Army Medical Center (DDEAMC) / RUMC
+SURGEON: Spencer Schulte, MD
+ASSISTANT: PA-C
+ANESTHESIA TYPE: Spinal with adductor canal block
+ESTIMATED BLOOD LOSS: 25 cc
+DRAINS: None
+SPECIMEN: Resected medial femoral condyle and tibial plateau articular bone
+COMPLICATIONS: None immediately apparent
+FINDINGS: Isolated full-thickness anteromedial osteoarthritis of the ${latLower} knee with intact ACL, intact full-thickness cartilage in lateral and patellofemoral compartments, and functionally correctable varus alignment.
+
+IMPLANTS:
+- Femoral Component: Zimmer Biomet Oxford Partial Knee Femoral Component (cemented)
+- Tibial Component: Zimmer Biomet Oxford Partial Knee Tibial Component (cemented)
+- Mobile Bearing Insert: Zimmer Biomet Oxford Mobile Bearing Polyethylene Insert
+
+INDICATIONS FOR SURGERY:
+Patient presenting with severe medial compartment knee pain refractory to conservative care (NSAIDs, PT, unloader bracing, injections). Radiographs show isolated anteromedial joint space loss with intact lateral compartment and preserved ACL. Discussed UKA vs TKA; patient elects to proceed with Oxford partial knee arthroplasty. Risks and benefits reviewed; informed consent obtained.
+
+PROCEDURE IN DETAIL:
+Supine positioning, time-out, IV abx, pneumatic tourniquet at 250 mmHg. IO Vancomycin 500mg/100mL infused into proximal tibia (CPT 36680). Minimally invasive medial parapatellar incision from superior pole of patella to 2 cm below tibial joint line. Capsulotomy performed. Lateral and patellofemoral compartments inspected and verified pristine; ACL verified intact. Anteromedial tibial resection performed with intramedullary/extramedullary alignment guide. Femoral condyle milled and drilled. Extension and flexion gaps balanced with feeler gauges. Definitive components cemented with pressurized radiopaque bone cement. Mobile bearing insert positioned. Tourniquet deflated, hemostasis achieved, periarticular cocktail injected. Layered closure with Stratafix barbed sutures, Prineo / Aquacel dressing.
+
+ASSISTANT ATTESTATION:
+PA-C medically necessary surgical assistant attestation.
+
+POSTOPERATIVE PLAN & REHABILITATION PROTOCOL:
+1. Weight-bearing: WBAT immediately POD 0.
+2. DVT Prophylaxis: Aspirin 81 mg PO BID x 4-6 weeks.
+3. Multimodal pain regimen.
+4. Follow-up: 2 weeks for surgical surveillance.`;
+      }
+
+      if (moduleType.startsWith("op_")) {
+        const procName = moduleType.replace(/^op_/, "").replace(/_/g, " ").toUpperCase();
+        return `DATE OF SURGERY: ${todayStr}
+
+PREOPERATIVE DIAGNOSIS:
+1. Orthopedic condition requiring surgical intervention (${lat} extremity)
+
+POSTOPERATIVE DIAGNOSIS:
+1. Orthopedic condition requiring surgical intervention (${lat} extremity)
+
+PROCEDURES PERFORMED:
+1. ${lat} ${procName}
+
+LOCATION: Dwight D. Eisenhower Army Medical Center (DDEAMC) / RUMC
+SURGEON: Spencer Schulte, MD
+ASSISTANT: PA-C
+ANESTHESIA TYPE: Spinal / General
+ESTIMATED BLOOD LOSS: 50-100 cc
+DRAINS: None
+COMPLICATIONS: None immediately apparent
+SPECIMEN: Resected tissue / hardware / bone to pathology as indicated
+FINDINGS: Documented surgical pathology and operative findings.
+
+IMPLANTS:
+[Document manufacturer, component types, sizes, lots, and fixation per dictated operative record].
+
+INDICATIONS FOR SURGERY:
+Indicated for surgical reconstruction/repair. Risks, benefits, and alternatives reviewed. Informed consent obtained.
+
+PROCEDURE IN DETAIL:
+1. Patient identification, verification of surgical extremity, positioning, anesthesia, antibiotic prophylaxis, sterile prep and drape, Time-Out.
+2. Surgical approach and exposure.
+3. Anatomic reduction / bone preparation / hardware removal / implant placement.
+4. Component trialing, kinematic assessment, stability, and fluoroscopic / radiographic verification.
+5. Copious irrigation and definitive fixation / cementation.
+6. Hemostasis and periarticular local analgesia.
+7. Meticulous layered closure (Stratafix barbed sutures, Dermabond Prineo / Aquacel Ag dressing).
+
+ASSISTANT ATTESTATION:
+PA-C medically necessary surgical assistant attestation.
+
+POSTOPERATIVE PLAN & REHABILITATION PROTOCOL:
+1. Weight-Bearing: Per operative protocol.
+2. DVT Prophylaxis: Aspirin 81 mg PO BID (or risk-stratified regimen).
+3. Multimodal pain regimen.
+4. Follow-up in 2 weeks.`;
       }
 
       if (moduleType.startsWith("custom_")) {
@@ -5940,7 +6078,29 @@ DR. SCHULTE'S CLINICAL & OPERATIVE PREFERENCES:
      - Injectate / Aspirate Details: default corticosteroid cocktail to "40mg Triamcinolone acetonide (Kenalog) + 4mL 1% Lidocaine + 4mL 0.25% Bupivacaine (Marcaine)" if specific doses were not dictated
      - Post-Procedure Tolerance & Neurovascular Check: Patient tolerated well, hemostasis achieved, neurovascularly intact.
   6. For post-op visits, always honor the dictated prior surgery joint and laterality (never flip a hip to a knee or vice-versa), and incorporate any matched Case DB surgical details (DOS, approach, implants, closure).
-  7. Auto-detect template: If the dictation clearly fits a different template or the user dictates a meta-command (e.g. 'use sports template'), set 'detectedModule' to that template and format 'finalClinicalNote' using that template's structure.`;
+  7. Auto-detect template: If the dictation clearly fits a different template or the user dictates a meta-command (e.g. 'use sports template'), set 'detectedModule' to that template and format 'finalClinicalNote' using that template's structure.
+  8. Operative Report Synthesis Protocol (Doximity Scribe Grade):
+     When an operative report is dictated or an operative template is active (e.g. Primary TKA, DA THA, UKA, Revision, Hemiarthroplasty, Trauma ORIF/IMN):
+     - Generate the complete, comprehensive, multi-paragraph hospital-grade operative report directly into 'finalClinicalNote'. NEVER return an abbreviated summary, bullet stub, or 5-line skeleton note.
+     - You MUST include all 18 standard surgical sections as demonstrated in the blueprint:
+       * DATE OF SURGERY
+       * PREOPERATIVE DIAGNOSIS
+       * POSTOPERATIVE DIAGNOSIS
+       * PROCEDURES PERFORMED (with all appropriate CPT codes, e.g. Primary TKA CPT 27447 + IO Vancomycin CPT 36680; DA THA CPT 27130 + fluoroscopy)
+       * LOCATION: Dwight D. Eisenhower Army Medical Center (DDEAMC) / RUMC
+       * SURGEON: Spencer Schulte, MD
+       * ASSISTANT: PA-C (Certified Physician Assistant)
+       * ANESTHESIA TYPE: Spinal (or General with regional block)
+       * ESTIMATED BLOOD LOSS
+       * DRAINS: None
+       * SPECIMEN: Resected articular bone and cartilage / soft tissue
+       * COMPLICATIONS: None immediately apparent
+       * FINDINGS: Comprehensive anatomic and pathologic findings
+       * IMPLANTS: List every dictated component with brand, model, size, and fixation (cemented vs press-fit). For Persona TKA: Femur (size, CR vs PS), Tibia (size, cemented), Poly Insert (thickness, MC vs CR/PS), and Patella (explicitly state whether native patella was retained with lateral facetectomy, or resurfaced with Persona 3-peg component).
+       * INDICATIONS FOR SURGERY: Rich narrative paragraph documenting failed non-operative modalities (>12 weeks PT, NSAIDs, injections), functional ADL impairment, radiographic severity, informed consent, and risk/benefit discussion.
+       * PROCEDURE IN DETAIL: Comprehensive step-by-step surgical narrative (10 to 15 full paragraphs) detailing: patient positioning, prophylactic IV & IO antibiotics (IO Vancomycin 500mg/100mL CPT 36680), surgical approach/exposure (midvastus or medial parapatellar), bone cuts/gap balancing, osteophyte debridement, trial reduction stability/ROM checks, patellar tracking (no-thumb technique), pressurized cementing in extension, definitive component locking, tourniquet release & hemostasis, periarticular cocktail, and meticulous layered Stratafix/Sylke/Prineo closure.
+       * ASSISTANT ATTESTATION: Formal statement documenting PA-C medically necessary surgical assistance.
+       * POSTOPERATIVE PLAN & REHABILITATION PROTOCOL: Clear weight-bearing status (WBAT POD 0), DVT chemoprophylaxis (ASA 81mg BID), multimodal oral analgesia, PT, and 2-week follow-up.`;
 
       const userPromptText = `Active Template ID: "${moduleType}"
 ${caseContextStr}
@@ -7443,15 +7603,15 @@ Generate and return ONLY the complete refined clinical note:`;
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Patella Resurfacing</label>
               <select id="opTkaPatella" onchange="assembleNote()" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+                <option value="Unresurfaced (Lateral Facetectomy)">Native Retained / Lateral Facetectomy (Unresurfaced)</option>
                 <option value="Resurfaced (Persona 3-peg cemented)">Resurfaced (Persona 3-peg cemented)</option>
-                <option value="Patelloplasty (Unresurfaced)">Patelloplasty (Unresurfaced)</option>
               </select>
             </div>
           </div>
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Implants Detailed</label>
-              <input id="opImplants" oninput="assembleNote()" type="text" value="Zimmer Biomet Persona: Femur Size 7, Tibia Size E Cemented, 10mm CR Poly, 32mm Patella" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <input id="opImplants" oninput="assembleNote()" type="text" value="" placeholder="e.g. Persona: Size 5 CR Femur, Size E Tibia, 10mm MC Poly, Unresurfaced" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
             </div>
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">EBL</label>
@@ -7480,7 +7640,7 @@ Generate and return ONLY the complete refined clinical note:`;
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Implants Detailed</label>
-              <input id="opImplants" oninput="assembleNote()" type="text" value="Zimmer Biomet: Z1 Collared Stem, 44mm Bipolar Outer Head with 28mm +0 CoCr Inner Head" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <input id="opImplants" oninput="assembleNote()" type="text" value="" placeholder="e.g. Zimmer Biomet: Z1 Collared Stem, 44mm Bipolar Outer Head with 28mm +0 CoCr Inner Head" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
             </div>
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">EBL</label>
@@ -8294,6 +8454,107 @@ Generate and return ONLY the complete refined clinical note:`;
       };
     }
 
+    function parseTkaDictationDetails(rawText, ageGenderStr, localCues) {
+      const t = String(rawText || "").trim();
+      const lower = t.toLowerCase();
+
+      // 1. Demographics (Age & Sex)
+      const ageMatch = t.match(/\b(\d{2,3})\s*(?:-|\s*)?(?:year|yr|y\/o|yo)[-\s]*(?:old\s*)?(male|female|man|woman|gentleman|lady|m|f)\b/i)
+        || String(ageGenderStr || "").match(/\b(\d{2,3})\s*([MF])\b/i);
+      const age = ageMatch ? ageMatch[1] : (String(ageGenderStr || "").match(/\d{2,3}/) ? String(ageGenderStr || "").match(/\d{2,3}/)[0] : "70");
+      const rawSex = ageMatch ? ageMatch[2].toLowerCase() : (String(ageGenderStr || "").toLowerCase().includes("f") ? "female" : "male");
+      const sexWord = (rawSex === "f" || rawSex === "female" || rawSex === "woman" || rawSex === "lady") ? "female" : "male";
+      const pronounSubj = sexWord === "female" ? "She" : "He";
+      const pronounPoss = sexWord === "female" ? "her" : "his";
+
+      // 2. Laterality
+      const latInput = document.getElementById("lat") ? document.getElementById("lat").value : "";
+      const laterality = (localCues && localCues.laterality && localCues.laterality !== "Bilateral")
+        ? localCues.laterality
+        : (/\bleft\b|\bl\s+tka\b|\bl-tka\b/i.test(t) && !/\bright\b|\br\s+tka\b|\br-tka\b/i.test(t)
+          ? "Left"
+          : (/\bright\b|\br\s+tka\b|\br-tka\b/i.test(t) ? "Right" : (latInput || "Right")));
+      const latLower = laterality.toLowerCase();
+      const icd10 = laterality === "Left" ? "M17.12 (Left Knee Osteoarthritis)" : "M17.11 (Right Knee Osteoarthritis)";
+
+      // 3. Femoral Component
+      let femurConstraint = "CR";
+      if (/\bps\b|posterior\s+stabil/i.test(t)) femurConstraint = "PS";
+      else if (/\bcps\b/i.test(t)) femurConstraint = "CPS";
+      else if (/\bcr\b|cruciate\s+retain/i.test(t)) femurConstraint = "CR";
+
+      let femurSize = "5";
+      const femurMatch = t.match(/(?:size\s*|femur\s*size\s*|femoral\s*size\s*|femur\s*)(\d{1,2}|[1-9])(?:\s*(?:cr|ps|cps))?\s*femur/i)
+        || t.match(/(?:size\s*)(\d{1,2}|[1-9])\s*(?:cr|ps|cps)/i)
+        || t.match(/femur\s*(?:size\s*)?(\d{1,2}|[1-9])/i);
+      if (femurMatch) {
+        femurSize = femurMatch[1];
+      }
+
+      // 4. Tibial Component
+      let tibiaSize = "E";
+      const tibiaMatch = t.match(/(?:size\s*|tibia\s*size\s*|tibial\s*size\s*)([A-J])\s*tibia/i)
+        || t.match(/\b([A-J])\s*tibia/i)
+        || t.match(/tibia\s*(?:size\s*)?([A-J])\b/i);
+      if (tibiaMatch) {
+        tibiaSize = tibiaMatch[1].toUpperCase();
+      }
+
+      // 5. Poly Insert
+      let polyThickness = "10";
+      const polyThickMatch = t.match(/(\d{1,2}(?:\.\d)?)\s*(?:mm\s*)?(?:mc|cr|ps|poly|insert)/i)
+        || t.match(/(?:mc|cr|ps|poly|insert)\s*(\d{1,2}(?:\.\d)?)/i);
+      if (polyThickMatch) {
+        polyThickness = polyThickMatch[1];
+      }
+
+      let polyType = "MC (Medial Congruent)";
+      if (/\bmc\b|medial\s+congruent/i.test(t)) polyType = "MC (Medial Congruent)";
+      else if (/\bps\b|posterior\s+stabil/i.test(t)) polyType = "PS (Posterior Stabilized)";
+      else if (/\bcr\b|cruciate\s+retain/i.test(t)) polyType = "CR (Cruciate Retaining)";
+
+      // 6. Patella
+      const patSelect = document.getElementById("opTkaPatella") ? document.getElementById("opTkaPatella").value : "";
+      const hasResurfaced = /\bresurfac|\b3-peg\b|\bpatella\s*(?:size\s*)?\d{2}\s*mm/i.test(t)
+        || (patSelect && patSelect.includes("Resurfaced"));
+      let patellaText = "Native patella retained; lateral facetectomy performed";
+      if (hasResurfaced) {
+        const patSizeMatch = t.match(/(\d{2})\s*mm\s*patella/i);
+        const pSize = patSizeMatch ? `${patSizeMatch[1]} mm` : "32 mm";
+        patellaText = `Resurfaced with Zimmer Biomet Persona 3-peg cemented all-polyethylene patella (${pSize})`;
+      }
+
+      // 7. Tourniquet & IO Vancomycin
+      const noTourniquet = /no\s+tourniquet|without\s+tourniquet/i.test(t);
+      const tourniquetMmHg = noTourniquet ? null : "250 mmHg";
+      const hasIoVanc = !/no\s+io\s+vanc|no\s+vancomycin/i.test(t);
+
+      // 8. Surgical Approach
+      const isMedialParapatellar = /medial\s+parapatellar/i.test(t);
+      const approachLabel = isMedialParapatellar ? "medial parapatellar capsular arthrotomy" : "midvastus capsular arthrotomy";
+
+      return {
+        age,
+        sexWord,
+        pronounSubj,
+        pronounPoss,
+        laterality,
+        latLower,
+        icd10,
+        femurSize,
+        femurConstraint,
+        tibiaSize,
+        polyThickness,
+        polyType,
+        hasResurfaced,
+        patellaText,
+        noTourniquet,
+        tourniquetMmHg,
+        hasIoVanc,
+        approachLabel
+      };
+    }
+
     // --- Master Note Assembler ---
     function assembleNote(forceSync = false) {
       if (isNoteManuallyEdited && !forceSync) {
@@ -8709,11 +8970,93 @@ POSTOPERATIVE PLAN & REHABILITATION PROTOCOL:
 4. Postoperative Multimodal Pain Regimen: ${opCtx.painProtocol}.
 5. Antibiotic Prophylaxis & Follow-Up: Complete 24-hour perioperative IV cefazolin prophylaxis; routine postoperative clinic visit and wound surveillance in 2 weeks with Dr. Spencer Schulte at DDEAMC.${opCtx.rehabNotes ? `\n6. Additional Surgeon Instructions: ${opCtx.rehabNotes}` : ""}`;
       } else if (type === "op_primary_tka") {
-        const constr = document.getElementById("opTkaConst") ? document.getElementById("opTkaConst").value : "Persona CR";
-        const pat = document.getElementById("opTkaPatella") ? document.getElementById("opTkaPatella").value : "Resurfaced";
-        const implants = document.getElementById("opImplants") ? document.getElementById("opImplants").value : "Implants";
+        const tka = parseTkaDictationDetails(combinedRawDictation, ageGender, localCues);
+        const opCtx = extractOperativeDictationOverrides(combinedRawDictation, ageGender, localCues);
         const ebl = document.getElementById("opEbl") ? document.getElementById("opEbl").value : "50 cc";
-        note = `OPERATIVE REPORT - PRIMARY TOTAL KNEE ARTHROPLASTY\nPATIENT: ${ptName} | DEMOGRAPHICS: ${ageGender}\nDATE OF SURGERY: ${new Date().toLocaleDateString()}\nSURGEON: Dr. Spencer Schulte, MD\nHOSPITAL: DDEAMC\n\nPROCEDURE: Primary Tricompartmental Total Knee Arthroplasty\nANESTHESIA: Spinal / General with adductor canal block\nESTIMATED BLOOD LOSS: ${ebl}\n\nIMPLANTS UTILIZED:\n${implants}\nConstraint: ${constr} | Patella: ${pat}\n\nTECHNIQUE & BALANCE:\nMedial parapatellar arthrotomy. Measured resection technique. Femoral and tibial cuts verified perpendicular to mechanical axis. Extension and flexion gaps balanced symmetrically. Patellar tracking confirmed central without lateral tilt (no-thumb technique).\n\nWOUND CLOSURE:\n${getClosureText()}\n\nPRECAUTIONS & PLAN:\n${instructions}\n1. Weight bearing as tolerated. Early active knee extension/flexion.\n2. DVT Prophylaxis: ASA 81 mg PO BID.\n3. Postop Pain Meds: Tylenol 1000 mg PO TID, Celebrex 200 mg PO BID, Suzetrigine 50 mg PO BID, Oxycodone 5 mg PO Q4h PRN.\n\nOPERATIVE DETAILS & FINDINGS:\n${structOp || clinicalNarrative || 'Routine primary course.'}`;
+        const manualImplantsVal = document.getElementById("opImplants") ? document.getElementById("opImplants").value.trim() : "";
+        const hasCustomManualImplants = manualImplantsVal && !manualImplantsVal.startsWith("Zimmer Biomet Persona: Femur Size 7");
+
+        const tourniquetSection = tka.tourniquetMmHg
+          ? `A non-sterile padded pneumatic tourniquet was placed around the proximal operative thigh. The operative lower extremity was prepped and draped in the standard sterile orthopedic fashion. The extremity was exsanguinated using a sterile Esmarch bandage, and the thigh tourniquet was inflated to ${tka.tourniquetMmHg}.`
+          : `The operative lower extremity was prepped and draped in the standard sterile orthopedic fashion. The procedure was performed without a tourniquet.`;
+
+        const ioVancSection = tka.hasIoVanc
+          ? `Prior to incision, regional intraosseous antibiotic prophylaxis was administered by infusing 500 mg of Vancomycin diluted in 100 mL of normal saline directly into the proximal medial tibia utilizing an intraosseous needle catheter (CPT 36680).\n\n`
+          : "";
+
+        const patellaSection = tka.hasResurfaced
+          ? `The patella was everted and measured. The native patellar articular surface was resected using a freehand oscillating saw guide, ensuring symmetric bone resection. Three peg holes were drilled using the Persona patellar drill guide, and a ${tka.patellaText} was cemented in pressurized fashion.`
+          : `The native patella was everted and inspected. Extensive peripheral osteophytes were resected to decompress the extensor mechanism. The native patellar articular surface was retained and a lateral facetectomy was performed, re-establishing physiologic patellofemoral tracking without lateral tilt.`;
+
+        const closureSection = (currentClosure && currentClosure !== "default")
+          ? getClosureText()
+          : `Layered anatomic wound closure was performed. The arthrotomy was reapproximated with a running heavy barbed absorbable suture (#1/#2 Stratafix). The deep fascial and subcutaneous layers were closed with 2-0 absorbable barbed sutures. The skin was closed with a running 3-0 subcuticular suture, reinforced with Dermabond Prineo skin closure system and an Aquacel Ag sterile compressive dressing.`;
+
+        note = `DATE OF SURGERY: ${new Date().toLocaleDateString()}
+
+PREOPERATIVE DIAGNOSIS:
+1. ${tka.laterality} Knee Osteoarthritis (${tka.icd10})
+
+POSTOPERATIVE DIAGNOSIS:
+1. ${tka.laterality} Knee Osteoarthritis (${tka.icd10})
+
+PROCEDURES PERFORMED:
+1. ${tka.laterality} Primary Total Knee Arthroplasty (CPT 27447)
+${tka.hasIoVanc ? "2. Intraosseous Regional Administration of Vancomycin Infusion (CPT 36680)\n" : ""}
+LOCATION: Dwight D. Eisenhower Army Medical Center (DDEAMC) / RUMC
+SURGEON: Spencer Schulte, MD
+ASSISTANT: ${opCtx.assistant}
+
+ANESTHESIA TYPE: ${opCtx.anesthesia === "General" ? "General anesthesia with adductor canal block" : "Spinal anesthesia with adductor canal block"}
+ESTIMATED BLOOD LOSS: ${ebl}
+DRAINS: None
+SPECIMEN: Resected articular bone and cartilage
+COMPLICATIONS: None immediately apparent
+FINDINGS: End-stage tricompartmental osteoarthritis of the ${tka.latLower} knee with full-thickness articular cartilage loss, eburnated subchondral bone, marginal osteophytes, and associated varus deformity.${opCtx.abnormalities ? `\nDictated Operative Findings: ${opCtx.abnormalities}.` : ""}
+
+IMPLANTS:
+- Femoral Component: Zimmer Biomet Persona ${tka.femurConstraint}, size ${tka.femurSize} (cemented)
+- Tibial Baseplate: Zimmer Biomet Persona Tibial Baseplate, size ${tka.tibiaSize} (cemented)
+- Articular Insert: Zimmer Biomet Persona ${tka.polyType} Polyethylene Insert, ${tka.polyThickness} mm
+- Patella: ${tka.patellaText}${hasCustomManualImplants ? `\n- Additional Dictated / Tray Implants: ${manualImplantsVal}` : ""}
+
+INDICATIONS FOR SURGERY:
+This is a ${tka.age}-year-old ${tka.sexWord} who presented with chronic, severe ${tka.latLower} knee pain refractory to extensive non-operative treatment (including oral anti-inflammatory and pain-relieving medications, formal physical therapy, activity modification, and intra-articular corticosteroid injections), resulting in progressive impairment of activities of daily living. Radiographic evaluation demonstrated end-stage bone-on-bone knee osteoarthritis with varus deformity. Surgical versus non-surgical options were discussed in detail with the patient, and together we decided it was best to proceed with a primary total knee arthroplasty with the goals of pain relief, restoration of stability, and functional improvement. All risks and benefits of surgery including bleeding, infection, instability, periprosthetic fracture, extensor mechanism disruption, neurovascular injury (including peroneal nerve injury), stiffness, ongoing pain, as well as medical and anesthesia-related complications were discussed with the patient and family, who elected to proceed.
+
+PROCEDURE IN DETAIL:
+Following correct identification of the patient and verification of the operative extremity, the patient was brought into the operating room and positioned supine on a standard operating table. Intravenous perioperative antibiotics and the above anesthesia were administered prior to incision per standard clinical protocol. ${tourniquetSection}
+
+${ioVancSection}A standard midline longitudinal skin incision was made medial to the tibial tubercle and centered over the patella, carried sharply down to the extensor mechanism and knee joint capsule. Minimal subfascial flaps were created to preserve cutaneous blood supply. A ${tka.approachLabel} was performed. The deep medial collateral ligament (MCL) was subperiosteally elevated along the medial proximal tibial joint line to achieve adequate exposure.
+
+${patellaSection}
+
+Attention was directed to the distal femur. An intramedullary femoral alignment guide was placed, and the distal femoral resection was performed in 5° to 6° of valgus, verified perpendicular to the mechanical axis of the femur.
+
+Attention was then turned to the proximal tibia. An extramedullary tibial alignment guide was positioned aligned with the tibial crest and the second metatarsal, with anatomic posterior slope. A proximal tibial resection was performed and verified perpendicular to the tibial shaft axis.
+
+Extension gap was evaluated using spacer blocks and verified to be symmetric, parallel, and stable. Attention was then directed back to the femur for flexion gap preparation. A 4-in-1 femoral sizing and resection block was positioned referencing the anterior cortex and posterior condyles. Anterior, posterior, and chamfer resections were completed. Menisci were excised, the anterior cruciate ligament was resected, and the posterior cruciate ligament was preserved and balanced. Posterior femoral osteophytes and loose bodies were thoroughly debrided.
+
+The proximal tibia was prepared using the appropriate tibial sizing tray aligned with the junction of the medial and middle thirds of the tibial tubercle. The tibial keel punch was completed.
+
+Trial reduction was performed using the appropriate trial femoral component, trial tibial baseplate, and trial modular insert. The knee was taken through a full passive range of motion from complete extension (0°) to beyond 120° of flexion. Varus and valgus stability were verified in full extension, 30°, 60°, and 90° of flexion. Patellar tracking was assessed with the "no-thumb" technique and confirmed central tracking within the femoral trochlea without tilt or subluxation.
+
+The trial components were removed. The bony surfaces were thoroughly cleansed with copious pulsed lavage irrigation and dried. High-viscosity bone cement with gentamycin/tobramycin was mixed and pressurized into the cancellous bone of the distal femur and proximal tibia. The definitive femoral component and tibial baseplate were seated and impacted into place. Extruded cement was meticulously removed circumferentially. The knee was brought into full extension with an insert spacer to maintain pressurized cement fixation until full polymerization.
+
+The definitive polyethylene articular insert was seated and locked securely into the tibial baseplate, with the locking mechanism confirmed intact.
+
+The pneumatic tourniquet was deflated. Meticulous hemostasis was achieved using bipolar electrocautery. A periarticular cocktail of liposomal bupivacaine / ropivacaine was infiltrated into the posterior capsule, collateral ligaments, and periosteum.
+
+${closureSection}
+
+ASSISTANT ATTESTATION:
+${opCtx.attestation} Sponge, needle, and instrument counts were correct at the conclusion of the procedure.
+
+POSTOPERATIVE PLAN & REHABILITATION PROTOCOL:
+1. Weight-Bearing Status: ${opCtx.weightBearing || `Weight-bearing as tolerated (WBAT) immediately on the ${tka.latLower} lower extremity with a front-wheeled walker; physical therapy mobilization on postoperative day 0.`}
+2. DVT Prophylaxis: ${opCtx.vtePlan || "Aspirin 81 mg PO BID for 6 weeks (unless elevated VTE risk warrants therapeutic anticoagulation)"}.
+3. Postoperative Pain Regimen: ${opCtx.painProtocol || "Multimodal oral analgesia: Tylenol 1000 mg PO TID, Celebrex 200 mg PO BID, Suzetrigine 50 mg PO BID, Oxycodone 5 mg PO Q4h PRN breakthrough pain"}.
+4. Physical Therapy: Early active knee range of motion and quadriceps reactivation.
+5. Antibiotic Prophylaxis & Follow-Up: Complete 24-hour perioperative IV cefazolin prophylaxis; routine postoperative clinic visit and wound surveillance in 2 weeks with Dr. Spencer Schulte at DDEAMC.${opCtx.rehabNotes ? `\n6. Additional Surgeon Instructions: ${opCtx.rehabNotes}` : ""}`;
       } else if (type === "op_hip_hemi") {
         const app = document.getElementById("opHemiApp") ? document.getElementById("opHemiApp").value : "Direct Anterior";
         const stem = document.getElementById("opHemiStem") ? document.getElementById("opHemiStem").value : "Z1 Collared";
