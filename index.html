@@ -317,7 +317,7 @@
         <textarea id="preVisitScreeningInput" oninput="autoSaveCurrentEncounter(); assembleNote();" rows="2" class="w-full bg-slate-900/80 border border-slate-800 rounded-lg p-2 text-xs text-slate-200 focus:outline-none focus:border-blue-500 no-scrollbar"></textarea>
       </div>
 
-      <textarea id="dictationBox" oninput="autoSaveCurrentEncounter(); assembleNote();" rows="3" placeholder="Dictate pre-visit screening notes OR day-of clinic exam & surgical plan..." class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500 no-scrollbar"></textarea>
+      <textarea id="dictationBox" onfocus="if(!getActiveTemplateValue()) highlightTemplateSelectRequired();" oninput="autoSaveCurrentEncounter(); assembleNote();" rows="3" placeholder="Select a clinical template above to begin dictating or entering notes..." class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500 no-scrollbar"></textarea>
       
       <div class="flex flex-wrap justify-between items-center gap-2 mt-2 pt-2 border-t border-slate-800/80">
         <div class="flex flex-wrap items-center gap-2.5">
@@ -476,27 +476,24 @@
             </button>
           </div>
           <select id="templateSelect" onchange="onModuleChanged(this.value, 'manual')" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-medium focus:outline-none focus:border-blue-500">
-            <optgroup label="On-The-Fly Quick Scribe (Doximity Style)">
-              <option value="auto_detect">✨ AI Auto-Detect Template from Dictation (Smart Route)</option>
+            <option value="" disabled selected>— Select a Template to Begin —</option>
+            <optgroup label="Clinical Outpatient Templates (Primary Clinic Order)">
+              <option value="postop">Postop clinic note</option>
+              <option value="sports">New Sports patient</option>
+              <option value="new_knee_right">NEW KNEE OA RIGHT</option>
+              <option value="new_knee_left">NEW KNEE OA LEFT</option>
+              <option value="new_knee_bilat">NEW KNEE OA Bilat</option>
+              <option value="new_hip_left">NEW HIP OA LEFT</option>
+              <option value="new_hip_right">NEW HIP OA RIGHT</option>
+              <option value="new_hip_bilat">New HIP BILAT</option>
+              <option value="painful_tka">H&amp;P PAINFUL TKA WORKUP</option>
+              <option value="painful_tha">H&amp;P PAINFUL THA WORKUP</option>
+              <option value="gen_fx">General fracture consult</option>
+              <option value="hip_fx">Hip Fracture Consult</option>
+            </optgroup>
+            <optgroup label="General &amp; Remote Care">
               <option value="general_soap">General Orthopedic SOAP / Add-On Consult Note</option>
-            </optgroup>
-            <optgroup label="Post-Operative Surveillance">
-              <option value="postop">Post-Operative Follow-Up (2W / 6W / 12W / 1Y)</option>
-            </optgroup>
-            <optgroup label="Primary Arthroplasty Clinic">
-              <option value="new_hip">New Hip Consultation (OA / AVN / Dysplasia)</option>
-              <option value="new_knee">New Knee Consultation (OA / Alignment)</option>
-            </optgroup>
-            <optgroup label="Revision & Problem Arthroplasty">
-              <option value="painful_joint">Painful TKA / THA (Failed Arthroplasty / PJI Workup)</option>
-            </optgroup>
-            <optgroup label="Telehealth & Remote Care">
               <option value="telehealth">Telephone Visit (MSK Diagnostic Review / 99441-3)</option>
-            </optgroup>
-            <optgroup label="Sports & Consultations">
-              <option value="sports">New Sports Knee / Shoulder Consult</option>
-              <option value="hip_fx">Geriatric Hip Fracture Inpatient Consult</option>
-              <option value="gen_fx">General ED Fracture Consult</option>
             </optgroup>
             <optgroup label="Operative Reports - Adult Reconstruction (Zimmer Biomet)">
               <option value="op_da_tha">Direct Anterior THA (Bikini / Standard / Z1)</option>
@@ -524,6 +521,9 @@
               <option value="op_clavicle">Op Note: Clavicle Shaft ORIF (Precontoured Plate)</option>
               <option value="op_general_id">Op Note: General Ortho (I&amp;D / Excisional Debridement / ORIF / HWR)</option>
             </optgroup>
+            <option value="new_knee" class="hidden">NEW KNEE OA (Legacy)</option>
+            <option value="new_hip" class="hidden">NEW HIP OA (Legacy)</option>
+            <option value="painful_joint" class="hidden">Painful Joint Workup (Legacy)</option>
             <optgroup label="Custom User Operative Templates" id="customTemplateGroup"></optgroup>
           </select>
         </div>
@@ -3067,35 +3067,91 @@ NOTES:
       return Array.isArray(parsed) ? parsed : [];
     }
 
-    let currentTemplateSelectionSource = "schedule"; // "schedule" | "auto" | "voice" | "manual"
+    let currentTemplateSelectionSource = "none"; // "none" | "schedule" | "auto" | "voice" | "manual"
     let isTemplateLockedByUser = false;
     let isEnlargedEncounterFocusOpen = false;
+
+    function getActiveTemplateValue() {
+      const sel = document.getElementById("templateSelect");
+      return (sel && sel.value) ? sel.value.trim() : "";
+    }
+
+    function highlightTemplateSelectRequired() {
+      const selects = ["encounterPrimaryTemplateSelect", "quickTemplateSelect", "focusModalTemplateSelect", "templateSelect"];
+      selects.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+          el.classList.add("ring-2", "ring-rose-500", "border-rose-500", "animate-pulse");
+          setTimeout(() => {
+            el.classList.remove("ring-2", "ring-rose-500", "border-rose-500", "animate-pulse");
+          }, 3500);
+        }
+      });
+      const elToFocus = document.getElementById("encounterPrimaryTemplateSelect") || document.getElementById("templateSelect");
+      if (elToFocus) {
+        elToFocus.scrollIntoView({ behavior: "smooth", block: "center" });
+        try { elToFocus.focus(); } catch (e) {}
+      }
+    }
+
+    function requireSelectedTemplateOrAlert(action = "dictation") {
+      const val = getActiveTemplateValue();
+      if (!val) {
+        highlightTemplateSelectRequired();
+        alert(`Please select a clinical template before proceeding with ${action}.\n\nThe app requires selecting a template first to prevent misrouting.`);
+        return false;
+      }
+      return true;
+    }
+
+    function updateDictationBoxPlaceholder() {
+      const dictBox = document.getElementById("dictationBox");
+      if (!dictBox) return;
+      const curVal = getActiveTemplateValue();
+      if (!curVal) {
+        dictBox.placeholder = "⚠️ [REQUIRED] Please select a clinical template above before dictating or entering notes...";
+      } else {
+        dictBox.placeholder = "Dictate or type clinic notes here (AI Stage 1 & Stage 2 will structure into your active template)...";
+      }
+    }
 
     function updateTemplateSelectionBadgeUI() {
       const badge = document.getElementById("templateSelectionSourceBadge");
       const autoBadge = document.getElementById("autoRoutedBadge");
       const mainSel = document.getElementById("templateSelect");
-      const curLabel = mainSel && mainSel.options[mainSel.selectedIndex]
+      const curVal = mainSel ? mainSel.value : "";
+      const curLabel = (mainSel && curVal && mainSel.selectedIndex >= 0 && mainSel.options[mainSel.selectedIndex])
         ? mainSel.options[mainSel.selectedIndex].text.split("(")[0].trim()
-        : "Template";
+        : "";
 
       if (badge) {
-        if (currentTemplateSelectionSource === "voice") {
+        if (!curVal) {
+          badge.innerText = "⚠️ Select Template Required";
+          badge.className = "text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-950/90 border border-amber-500/60 text-amber-300";
+        } else if (currentTemplateSelectionSource === "voice") {
           badge.innerText = `🎙️ Voice Command: ${curLabel}`;
           badge.className = "text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-950/90 border border-emerald-500/60 text-emerald-300";
         } else if (currentTemplateSelectionSource === "manual") {
-          badge.innerText = "✋ Manually Selected by You";
+          badge.innerText = `✋ Selected: ${curLabel}`;
           badge.className = "text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-950/90 border border-amber-500/60 text-amber-300";
-        } else if (currentTemplateSelectionSource === "auto") {
-          badge.innerText = "✨ Chosen by App (Speech Context)";
-          badge.className = "text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-950/90 border border-purple-500/60 text-purple-300";
+        } else if (curVal === "postop") {
+          badge.innerText = "🔗 Matched Case DB: Post-Op";
+          badge.className = "text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-950/90 border border-emerald-500/50 text-emerald-300";
         } else {
-          badge.innerText = "🤖 Chosen by App (Schedule)";
+          badge.innerText = `📋 Active: ${curLabel}`;
           badge.className = "text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-950/90 border border-blue-500/50 text-blue-300";
         }
       }
       if (autoBadge) {
-        if (currentTemplateSelectionSource === "voice") {
+        if (!curVal) {
+          autoBadge.innerText = "⚠️ Template Required";
+          autoBadge.className = "text-[10px] text-amber-300 font-bold bg-amber-950/80 px-2 py-0.5 rounded-full border border-amber-500/50";
+          autoBadge.classList.remove("hidden");
+        } else if (curVal === "postop" && (matchedCaseData || currentTemplateSelectionSource === "schedule")) {
+          autoBadge.innerText = "🔗 Matched Case DB: Post-Op";
+          autoBadge.className = "text-[10px] text-emerald-300 font-bold bg-emerald-950/80 px-2 py-0.5 rounded-full border border-emerald-500/50";
+          autoBadge.classList.remove("hidden");
+        } else if (currentTemplateSelectionSource === "voice") {
           autoBadge.innerText = `🎙️ Voice Override: ${curLabel}`;
           autoBadge.className = "text-[10px] text-emerald-300 font-bold bg-emerald-950/80 px-2 py-0.5 rounded-full border border-emerald-500/50";
           autoBadge.classList.remove("hidden");
@@ -3103,6 +3159,8 @@ NOTES:
           autoBadge.innerText = `✋ Manual: ${curLabel}`;
           autoBadge.className = "text-[10px] text-amber-300 font-semibold bg-amber-950/80 px-2 py-0.5 rounded-full border border-amber-500/50";
           autoBadge.classList.remove("hidden");
+        } else {
+          autoBadge.classList.add("hidden");
         }
       }
     }
@@ -3118,6 +3176,7 @@ NOTES:
         }
       });
       updateTemplateSelectionBadgeUI();
+      updateDictationBoxPlaceholder();
     }
 
     function enterFullScreenEncounterFocusMode() {
@@ -3244,7 +3303,9 @@ NOTES:
       activeEncounterStage = "In-Clinic";
       matchedCaseData = null;
       isTemplateLockedByUser = false;
-      currentTemplateSelectionSource = "auto";
+      currentTemplateSelectionSource = "none";
+      document.getElementById("templateSelect").value = "";
+      syncQuickTemplateDropdown();
       resetActiveStructuredSections();
       setManualNoteEditLock(false);
 
@@ -4318,7 +4379,17 @@ NOTES:
 
       document.getElementById("ptName").value = enc.name;
       document.getElementById("ptAgeGender").value = enc.ageGender;
-      document.getElementById("templateSelect").value = enc.moduleVal || (matchedCaseData ? "postop" : "new_hip");
+      const isPostOpPatient = Boolean(liveMatch || enc.matchedCaseData || enc.moduleVal === "postop");
+      if (isPostOpPatient) {
+        document.getElementById("templateSelect").value = "postop";
+        currentTemplateSelectionSource = "schedule";
+      } else if (enc.templateLockedByUser && enc.moduleVal) {
+        document.getElementById("templateSelect").value = enc.moduleVal;
+        currentTemplateSelectionSource = enc.templateSelectionSource || "manual";
+      } else {
+        document.getElementById("templateSelect").value = "";
+        currentTemplateSelectionSource = "none";
+      }
       syncQuickTemplateDropdown();
       document.getElementById("postOpInstructions").value = (enc.planSummary && enc.planSummary !== "Routine evaluation")
         ? enc.planSummary
@@ -4367,6 +4438,11 @@ NOTES:
     function loadAndStartDictation(event, encounterId) {
       if (event) event.stopPropagation();
       loadEncounterIntoWorkspace(encounterId);
+      if (!getActiveTemplateValue()) {
+        highlightTemplateSelectRequired();
+        alert("Please select a clinical template for this patient before starting dictation.");
+        return;
+      }
       setTimeout(() => {
         toggleVoiceDictation();
       }, 60);
@@ -4375,6 +4451,11 @@ NOTES:
     function loadAndStartAddendum(event, encounterId) {
       if (event) event.stopPropagation();
       loadEncounterIntoWorkspace(encounterId);
+      if (!getActiveTemplateValue()) {
+        highlightTemplateSelectRequired();
+        alert("Please select a clinical template for this patient before starting an addendum.");
+        return;
+      }
       setTimeout(() => {
         startVoiceAddendumDictation();
       }, 60);
@@ -4822,10 +4903,10 @@ Return ONLY valid JSON matching: { "clinicDate": "YYYY-MM-DD" | null, "patients"
               }
 
               const isPostOp = registryMatch !== null || pt.predictedModule === "postop";
-              const resolvedModule = isPostOp ? "postop" : (pt.predictedModule || "new_hip");
+              const resolvedModule = isPostOp ? "postop" : "";
               const tmplSelect = document.getElementById("templateSelect");
-              const opt = Array.from(tmplSelect.options).find(o => o.value === resolvedModule);
-              const moduleLabel = opt ? opt.text.split("(")[0].trim() : "Clinic Evaluation";
+              const opt = resolvedModule ? Array.from(tmplSelect.options).find(o => o.value === resolvedModule) : null;
+              const moduleLabel = opt ? opt.text.split("(")[0].trim() : (isPostOp ? "Postop clinic note" : "— Select Template —");
 
               const newEnc = {
                 id: "enc_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
@@ -5061,32 +5142,13 @@ Extract and return ONLY valid JSON matching:
         matchedCaseData = selectCaseMatchingProcedure(matchedCaseData, activeStructuredSections.indexProcedure);
       }
 
-      // 2. Auto-route or voice-override clinical template
+      // 2. Voice-override clinical template (only if surgeon explicitly commanded a template switch by voice)
       const tmplSelect = document.getElementById("templateSelect");
       const explicitVoiceMod = parsed.explicitVoiceTemplateOverride || localCues.explicitVoiceTemplateOverride || null;
       if (explicitVoiceMod && tmplSelect && Array.from(tmplSelect.options).some(o => o.value === explicitVoiceMod)) {
         onModuleChanged(explicitVoiceMod, "voice");
-      } else if (!isTemplateLockedByUser) {
-        const targetMod = (parsed.detectedModule && parsed.detectedModule !== "auto_detect" ? parsed.detectedModule : null)
-          || localCues.detectedModule
-          || (tmplSelect && tmplSelect.value === "auto_detect" ? "general_soap" : null);
-        if (targetMod && tmplSelect && Array.from(tmplSelect.options).some(o => o.value === targetMod)) {
-          currentTemplateSelectionSource = "auto";
-          if (tmplSelect.value !== targetMod) {
-            tmplSelect.value = targetMod;
-            renderTemplateFields();
-          }
-          syncQuickTemplateDropdown();
-          const badge = document.getElementById("autoRoutedBadge");
-          if (badge) {
-            badge.innerText = `✨ AI Auto-Routed: ${targetMod}`;
-            badge.className = "text-[10px] text-purple-300 font-semibold bg-purple-950/80 px-2 py-0.5 rounded-full border border-purple-500/50";
-            badge.classList.remove("hidden");
-          }
-        }
-      } else {
-        syncQuickTemplateDropdown();
       }
+      syncQuickTemplateDropdown();
 
       // 3. Apply patient demographics & laterality
       const resolvedPtName = parsed.patientName || localCues.patientName;
@@ -5333,8 +5395,14 @@ Extract and return ONLY valid JSON matching:
     function getAllTemplateModuleEnumValues() {
       const sel = document.getElementById("templateSelect");
       const baseIds = [
-        "auto_detect", "general_soap", "postop", "new_hip", "new_knee", "painful_joint",
-        "telehealth", "sports", "hip_fx", "gen_fx", "op_da_tha", "op_da_tha_fnf",
+        "postop", "sports",
+        "new_knee_right", "new_knee_left", "new_knee_bilat",
+        "new_hip_left", "new_hip_right", "new_hip_bilat",
+        "painful_tka", "painful_tha",
+        "gen_fx", "hip_fx",
+        "general_soap", "telehealth",
+        "new_hip", "new_knee", "painful_joint",
+        "op_da_tha", "op_da_tha_fnf",
         "op_primary_tka", "op_uka", "op_tka_single_rev", "op_rev_tka", "op_tha_head_liner",
         "op_b2_rev_post", "op_stage1_tha_spacer", "op_tka_spacer", "op_stage1_pji",
         "op_stage2_tha", "op_post_cement_hemi", "op_hip_hemi", "op_retro_imn_femur",
@@ -5657,10 +5725,13 @@ Extract and return ONLY valid JSON matching:
     function getTemplateReferenceBlueprint(moduleType, matchedCase = null) {
       const ptName = (document.getElementById("ptName") ? document.getElementById("ptName").value.trim() : "") || "[Patient Name]";
       const ageGender = (document.getElementById("ptAgeGender") ? document.getElementById("ptAgeGender").value.trim() : "") || "[Age/Gender]";
-      const lat = (document.getElementById("lat") ? document.getElementById("lat").value.trim() : "") || "Right";
+      let lat = (document.getElementById("lat") ? document.getElementById("lat").value.trim() : "") || "Right";
+      if (moduleType === "new_knee_right" || moduleType === "new_hip_right") lat = "Right";
+      else if (moduleType === "new_knee_left" || moduleType === "new_hip_left") lat = "Left";
+      else if (moduleType === "new_knee_bilat" || moduleType === "new_hip_bilat") lat = "Bilateral";
       const todayStr = new Date().toLocaleDateString();
 
-      if (moduleType === "new_knee") {
+      if (moduleType === "new_knee" || moduleType.startsWith("new_knee")) {
         return `ADULT RECONSTRUCTION CLINICAL CONSULTATION - NEW KNEE
 PATIENT: ${ptName} | DEMOGRAPHICS: ${ageGender}
 DATE OF SERVICE: ${todayStr}
@@ -5691,7 +5762,7 @@ MEDICAL DECISION MAKING (MDM), ASSESSMENT & PLAN:
    - If SURGICAL CANDIDATE: Patient indicated for joint arthroplasty (CPT 27447 TKA or 27446 UKA); patient elects to proceed. Review surgical approach, multimodal analgesia (adductor canal block), rapid recovery, and comprehensive risks/alternatives. Preoperative surgical clearance initiated (dental clearance, glycemic optimization, multimodal DVT prophylaxis).`;
       }
 
-      if (moduleType === "new_hip") {
+      if (moduleType === "new_hip" || moduleType.startsWith("new_hip")) {
         return `ADULT RECONSTRUCTION CLINICAL CONSULTATION - NEW HIP
 PATIENT: ${ptName} | DEMOGRAPHICS: ${ageGender}
 DATE OF SERVICE: ${todayStr}
@@ -5758,7 +5829,7 @@ ASSESSMENT & PLAN:
 3. Return precautions (fever, wound drainage, calf swelling, acute pain) reviewed with patient.`;
       }
 
-      if (moduleType === "painful_joint") {
+      if (moduleType === "painful_joint" || moduleType === "painful_tka" || moduleType === "painful_tha") {
         return `EVALUATION OF THE PAINFUL / FAILED TOTAL JOINT ARTHROPLASTY
 PATIENT: ${ptName} | DEMOGRAPHICS: ${ageGender}
 DATE: ${todayStr}
@@ -6078,7 +6149,7 @@ DR. SCHULTE'S CLINICAL & OPERATIVE PREFERENCES:
      - Injectate / Aspirate Details: default corticosteroid cocktail to "40mg Triamcinolone acetonide (Kenalog) + 4mL 1% Lidocaine + 4mL 0.25% Bupivacaine (Marcaine)" if specific doses were not dictated
      - Post-Procedure Tolerance & Neurovascular Check: Patient tolerated well, hemostasis achieved, neurovascularly intact.
   6. For post-op visits, always honor the dictated prior surgery joint and laterality (never flip a hip to a knee or vice-versa), and incorporate any matched Case DB surgical details (DOS, approach, implants, closure).
-  7. Auto-detect template: If the dictation clearly fits a different template or the user dictates a meta-command (e.g. 'use sports template'), set 'detectedModule' to that template and format 'finalClinicalNote' using that template's structure.
+  7. Strict Template Adherence & Anti-Pigeonholing: The surgeon selected '${moduleType}'. You MUST format 'finalClinicalNote' using '${moduleType}' and follow its blueprint structure exactly. Do NOT auto-switch, override, or guess a different template unless the surgeon explicitly spoke a verbal meta-command (e.g. 'please use sports template'). Set 'detectedModule' to '${moduleType}'.
   8. Operative Report Synthesis Protocol (Doximity Scribe Grade):
      When an operative report is dictated or an operative template is active (e.g. Primary TKA, DA THA, UKA, Revision, Hemiarthroplasty, Trauma ORIF/IMN):
      - Generate the complete, comprehensive, multi-paragraph hospital-grade operative report directly into 'finalClinicalNote'. NEVER return an abbreviated summary, bullet stub, or 5-line skeleton note.
@@ -6399,7 +6470,7 @@ Generate and return ONLY the complete refined clinical note:`;
             const enc = encounters.find(e => e.id === job.encounterId);
             if (enc) {
               if (job.audioBase64 && transcriptToStructure) enc.dictation = transcriptToStructure;
-              if (parsed.detectedModule && parsed.detectedModule !== "auto_detect") enc.moduleVal = parsed.detectedModule;
+              if (parsed.explicitVoiceTemplateOverride) enc.moduleVal = parsed.explicitVoiceTemplateOverride;
               if (parsed.finalClinicalNote) enc.assembledNote = parsed.finalClinicalNote;
               if (parsed.ageGender) enc.ageGender = parsed.ageGender;
               if (parsed.one_liner_summary || parsed.assessment_and_plan) enc.planSummary = parsed.one_liner_summary || parsed.assessment_and_plan;
@@ -6466,8 +6537,14 @@ Generate and return ONLY the complete refined clinical note:`;
         return;
       }
 
+      const moduleType = getActiveTemplateValue();
+      if (!moduleType) {
+        highlightTemplateSelectRequired();
+        alert("Please select a clinical template before parsing dictation.\n\nThe app requires selecting a template first to prevent misrouting.");
+        return;
+      }
+
       const btn = document.getElementById("aiParseBtn");
-      const moduleType = document.getElementById("templateSelect").value;
       setManualNoteEditLock(false);
 
       // Instant local section & cue routing (never mutates #dictationBox)
@@ -6952,6 +7029,11 @@ Generate and return ONLY the complete refined clinical note:`;
     function openFocusDictationModal() {
       const modal = document.getElementById("doximityDictationModal");
       if (!modal) return;
+      if (!getActiveTemplateValue()) {
+        highlightTemplateSelectRequired();
+        alert("Please select a clinical template before proceeding with dictation.\n\nThe app requires selecting a template first to prevent misrouting.");
+        return;
+      }
       syncQuickTemplateDropdown();
       updateOrthoLibraryCountBadges();
       const ptNameVal = document.getElementById("ptName").value.trim();
@@ -7188,11 +7270,13 @@ Generate and return ONLY the complete refined clinical note:`;
         completeFocusDictationAndParse();
         return;
       }
+      if (!requireSelectedTemplateOrAlert("voice dictation")) return;
       isAddendumDictationMode = false;
       focusElapsedSeconds = 0;
       const timerEl = document.getElementById("focusModalTimer");
       if (timerEl) timerEl.innerText = "00:00";
       openFocusDictationModal();
+      if (!getActiveTemplateValue()) return;
       startSingleStreamAudioRecording();
     }
 
@@ -7202,11 +7286,13 @@ Generate and return ONLY the complete refined clinical note:`;
         openFocusDictationModal();
         return;
       }
+      if (!requireSelectedTemplateOrAlert("addendum dictation")) return;
       isAddendumDictationMode = true;
       focusElapsedSeconds = 0;
       const timerEl = document.getElementById("focusModalTimer");
       if (timerEl) timerEl.innerText = "00:00";
       openFocusDictationModal();
+      if (!getActiveTemplateValue()) return;
       startSingleStreamAudioRecording();
     }
 
@@ -7265,15 +7351,15 @@ Generate and return ONLY the complete refined clinical note:`;
 
     function onModuleChanged(selectedVal, source = "manual") {
       const mainSel = document.getElementById("templateSelect");
-      if (selectedVal && mainSel) {
-        mainSel.value = selectedVal;
+      if (mainSel) {
+        mainSel.value = selectedVal || "";
       }
       if (source === "voice") {
         currentTemplateSelectionSource = "voice";
-        isTemplateLockedByUser = true;
+        isTemplateLockedByUser = Boolean(selectedVal);
       } else if (source === "manual") {
-        currentTemplateSelectionSource = selectedVal === "auto_detect" ? "auto" : "manual";
-        isTemplateLockedByUser = selectedVal !== "auto_detect";
+        currentTemplateSelectionSource = selectedVal ? "manual" : "none";
+        isTemplateLockedByUser = Boolean(selectedVal);
       }
       syncQuickTemplateDropdown();
       setManualNoteEditLock(false);
@@ -7287,6 +7373,16 @@ Generate and return ONLY the complete refined clinical note:`;
       syncQuickTemplateDropdown();
       const form = document.getElementById("dynamicForm");
       let html = "";
+
+      if (!type) {
+        form.innerHTML = `
+          <div class="p-3 text-center text-xs text-amber-300/90 bg-amber-950/30 border border-amber-500/30 rounded-xl flex flex-col items-center gap-1.5">
+            <span class="font-bold">⚠️ Clinical Template Required</span>
+            <span class="text-slate-300 text-[11px]">Please select a clinical template from the dropdown above before dictating or assembling notes.</span>
+          </div>
+        `;
+        return;
+      }
 
       if (type === "auto_detect" || type === "general_soap") {
         html = `
@@ -7326,13 +7422,18 @@ Generate and return ONLY the complete refined clinical note:`;
             </div>
           </div>
         `;
-      } else if (type === "new_hip") {
+      } else if (type === "new_hip" || type.startsWith("new_hip")) {
+        let defaultLat = "Left";
+        if (type === "new_hip_right") defaultLat = "Right";
+        else if (type === "new_hip_bilat") defaultLat = "Bilateral";
         html = `
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Laterality</label>
               <select id="lat" onchange="assembleNote()" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
-                <option value="Right">Right</option><option value="Left">Left</option><option value="Bilateral">Bilateral</option>
+                <option value="Left" ${defaultLat === "Left" ? "selected" : ""}>Left</option>
+                <option value="Right" ${defaultLat === "Right" ? "selected" : ""}>Right</option>
+                <option value="Bilateral" ${defaultLat === "Bilateral" ? "selected" : ""}>Bilateral</option>
               </select>
             </div>
             <div>
@@ -7355,13 +7456,18 @@ Generate and return ONLY the complete refined clinical note:`;
             </div>
           </div>
         `;
-      } else if (type === "new_knee") {
+      } else if (type === "new_knee" || type.startsWith("new_knee")) {
+        let defaultLat = "Right";
+        if (type === "new_knee_left") defaultLat = "Left";
+        else if (type === "new_knee_bilat") defaultLat = "Bilateral";
         html = `
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Laterality</label>
               <select id="lat" onchange="assembleNote()" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
-                <option value="Right">Right</option><option value="Left">Left</option><option value="Bilateral">Bilateral</option>
+                <option value="Right" ${defaultLat === "Right" ? "selected" : ""}>Right</option>
+                <option value="Left" ${defaultLat === "Left" ? "selected" : ""}>Left</option>
+                <option value="Bilateral" ${defaultLat === "Bilateral" ? "selected" : ""}>Bilateral</option>
               </select>
             </div>
             <div>
@@ -7384,18 +7490,30 @@ Generate and return ONLY the complete refined clinical note:`;
             </div>
           </div>
         `;
-      } else if (type === "painful_joint") {
+      } else if (type === "painful_joint" || type === "painful_tka" || type === "painful_tha") {
+        const defaultJoint = type === "painful_tha" ? "Total Hip Arthroplasty" : "Total Knee Arthroplasty";
         html = `
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Joint & Laterality</label>
-              <input id="jointId" oninput="assembleNote()" type="text" value="Right Total Knee Arthroplasty" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+              <input id="jointId" oninput="assembleNote()" type="text" value="${escapeHtml(defaultJoint)}" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
             </div>
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Pain-Free Interval</label>
               <input id="pfi" oninput="assembleNote()" type="text" value="5-year pain-free interval prior to acute onset" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
             </div>
           </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Serologies (ESR / CRP)</label>
+              <input id="pjiLabs" oninput="assembleNote()" type="text" value="ESR: 14 mm/hr | CRP: 2.1 mg/L" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+            </div>
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Synovial Aspiration</label>
+              <input id="pjiAsp" oninput="assembleNote()" type="text" value="WBC: 850 /mcL, 22% PMN, LE neg" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+            </div>
+          </div>
+        `;
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="text-[10px] text-slate-400 block mb-1">Serologies (ESR / CRP)</label>
@@ -8567,14 +8685,13 @@ Generate and return ONLY the complete refined clinical note:`;
         ? `${preVisitText} ${rawDictation}`
         : (rawDictation || preVisitText);
       const localCues = extractLocalClinicalCues(combinedRawDictation);
-      let type = (rawType === "auto_detect") ? (localCues.detectedModule || "general_soap") : rawType;
-      if (!isTemplateLockedByUser && localCues.detectedModule && localCues.detectedModule.startsWith("op_") && type !== localCues.detectedModule) {
-        type = localCues.detectedModule;
-        const tmplEl = document.getElementById("templateSelect");
-        if (tmplEl && tmplEl.value !== type) {
-          tmplEl.value = type;
-          renderTemplateFields(true);
+      let type = rawType;
+      if (!type) {
+        const noteEl = document.getElementById("noteOutput");
+        if (noteEl && !noteEl.value.trim()) {
+          noteEl.placeholder = "Please select a clinical template above to assemble or view note preview.";
         }
+        return;
       }
 
       const ptName = document.getElementById("ptName").value.trim() || localCues.patientName || "[Patient Name]";
@@ -8640,8 +8757,11 @@ ASSESSMENT & PLAN:
           .replace(/{PRECAUTIONS}/g, instructions)
           .replace(/{DICTATION}/g, structOp || clinicalNarrative || "Routine course without complication.");
 
-      } else if (type === "new_hip") {
-        const lat = localCues.laterality || (document.getElementById("lat") ? document.getElementById("lat").value : "Right");
+      } else if (type === "new_hip" || type.startsWith("new_hip")) {
+        let lat = localCues.laterality || (document.getElementById("lat") ? document.getElementById("lat").value : "Right");
+        if (type === "new_hip_left") lat = "Left";
+        else if (type === "new_hip_right") lat = "Right";
+        else if (type === "new_hip_bilat") lat = "Bilateral";
         const eti = document.getElementById("etiology") ? document.getElementById("etiology").value : "Primary Osteoarthritis";
         const ir = document.getElementById("hipIR") ? document.getElementById("hipIR").value : "5°";
         const fc = document.getElementById("hipFC") ? document.getElementById("hipFC").value : "0°";
@@ -8737,8 +8857,11 @@ ${hipXrSection}${preloadedOrders && isSurgicalHip ? `\n- Imaging / Workup Protoc
 
 ${hipPlanSection}`;
 
-      } else if (type === "new_knee") {
-        const lat = localCues.laterality || (document.getElementById("lat") ? document.getElementById("lat").value : "Right");
+      } else if (type === "new_knee" || type.startsWith("new_knee")) {
+        let lat = localCues.laterality || (document.getElementById("lat") ? document.getElementById("lat").value : "Right");
+        if (type === "new_knee_left") lat = "Left";
+        else if (type === "new_knee_right") lat = "Right";
+        else if (type === "new_knee_bilat") lat = "Bilateral";
         const comp = document.getElementById("kneeComp") ? document.getElementById("kneeComp").value : "Tricompartmental";
         const rom = localCues.kneeROM || (document.getElementById("kneeROM") ? document.getElementById("kneeROM").value : "0° - 110°");
         const stab = document.getElementById("kneeStab") ? document.getElementById("kneeStab").value : "Stable varus/valgus, intact ACL";
@@ -8821,8 +8944,9 @@ INDEPENDENT RADIOGRAPHIC INTERPRETATION (PERSONAL REVIEW BY ATTENDING SURGEON):
 ${kneeXrSection}${preloadedOrders && isSurgicalKnee ? `\n- Imaging / Workup Protocol: ${preloadedOrders}` : ""}
 
 ${kneePlanSection}`;
-      } else if (type === "painful_joint") {
-        const joint = (document.getElementById("jointId") ? document.getElementById("jointId").value : "") || localCues.indexProcedure || "Right Total Knee Arthroplasty";
+      } else if (type === "painful_joint" || type === "painful_tka" || type === "painful_tha") {
+        const defaultJointName = type === "painful_tha" ? "Total Hip Arthroplasty" : "Total Knee Arthroplasty";
+        const joint = (document.getElementById("jointId") ? document.getElementById("jointId").value : "") || localCues.indexProcedure || defaultJointName;
         const pfi = document.getElementById("pfi") ? document.getElementById("pfi").value : "Interval";
         const labs = document.getElementById("pjiLabs") ? document.getElementById("pjiLabs").value : "Labs pending";
         const asp = document.getElementById("pjiAsp") ? document.getElementById("pjiAsp").value : "Aspiration pending";
