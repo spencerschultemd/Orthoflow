@@ -7514,17 +7514,6 @@ Generate and return ONLY the complete refined clinical note:`;
             </div>
           </div>
         `;
-          <div class="grid grid-cols-2 gap-2">
-            <div>
-              <label class="text-[10px] text-slate-400 block mb-1">Serologies (ESR / CRP)</label>
-              <input id="pjiLabs" oninput="assembleNote()" type="text" value="ESR: 14 mm/hr | CRP: 2.1 mg/L" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
-            </div>
-            <div>
-              <label class="text-[10px] text-slate-400 block mb-1">Synovial Aspiration</label>
-              <input id="pjiAsp" oninput="assembleNote()" type="text" value="WBC: 850 /mcL, 22% PMN, LE neg" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
-            </div>
-          </div>
-        `;
       } else if (type === "postop") {
         const defaultProc = (matchedCaseData ? formatCaseProcedureWithLaterality(matchedCaseData) : "") || (activeStructuredSections && activeStructuredSections.indexProcedure) || "";
         const defaultDos = (matchedCaseData && matchedCaseData.dos) ? matchedCaseData.dos : "";
